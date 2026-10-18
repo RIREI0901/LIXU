@@ -80,7 +80,8 @@
   .rl-mood-item { padding: 5px 12px; border-radius: 999px; background: #fff7e6; color: #b45309; border: 1px solid #f0d98b; font-size: 12px; }
   .rl-mood-empty { width: 100%; text-align: center; color: #999; padding: 12px 0; font-size: 12px; }
 
-  /* 管理模式 */
+    .rl-search-input { width: 100%; padding: 10px 12px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #ddd; background: #f8f8f8; font-size: 13px; outline: none; }
+ /* 管理模式 */
   .manage-bar { display: none; padding: 10px 16px; background: #fff7e6; border-bottom: 1px solid #f0d98b; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .manage-bar.show { display: flex; }
   .manage-bar-btn { padding: 6px 12px; border-radius: 6px; border: none; font-size: 13px; cursor: pointer; }
@@ -315,7 +316,10 @@
   .call-mini-name { font-size: 12px; font-weight: 500; }
   .call-mini-timer { font-size: 11px; color: #999; font-variant-numeric: tabular-nums; }
 
-  /* 弹窗 */
+   .settings-tabs { display: flex; gap: 8px; margin-bottom: 20px; padding-bottom: 10px; overflow-x: auto; }
+  .settings-tab { padding: 8px 16px; border-radius: 999px; font-size: 14px; color: #666; cursor: pointer; background: #f0f0f0; white-space: nowrap; }
+  .settings-tab.active { background: #333; color: #fff; font-weight: 500; }
+ /* 弹窗 */
   .letter-modal { width: 90%; max-width: 420px; }
   .letter-modal input, .letter-modal textarea { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px; background: #f0f0f0; color: #333; font-size: 14px; font-family: inherit; margin-bottom: 10px; }
   .letter-modal textarea { height: 160px; resize: vertical; line-height: 1.6; }
@@ -495,6 +499,7 @@
           <input type="file" id="wordcardsFileInput" accept=".json" style="display:none">
         </div>
         <div class="rl-result" id="importResult"></div>
+       <input type="text" class="rl-search-input" id="searchCards" placeholder="搜索当前分组的字卡..." oninput="renderReplyGroups()">
         <div class="rl-groups" id="rlGroups"></div>
         <div class="manage-list" id="manageListCards"></div>
       </div>
@@ -511,6 +516,7 @@
           <input type="file" id="moodFileInput" accept=".json" style="display:none">
         </div>
         <div class="rl-result" id="moodResult"></div>
+       <input type="text" class="rl-search-input" id="searchMood" placeholder="搜索状态..." oninput="renderMoodList()">
         <div class="rl-mood-list" id="moodList"></div>
         <div class="manage-list" id="manageListMood"></div>
       </div>
@@ -527,6 +533,7 @@
           <input type="file" id="patFileInput" accept=".json" style="display:none">
         </div>
         <div class="rl-result" id="patResult"></div>
+       <input type="text" class="rl-search-input" id="searchPat" placeholder="搜索拍一拍..." oninput="renderPatList()">
         <div class="rl-mood-list" id="patList"></div>
         <div class="manage-list" id="manageListPat"></div>
       </div>
@@ -543,6 +550,7 @@
           <input type="file" id="periodFileInput" accept=".json" style="display:none">
         </div>
         <div class="rl-result" id="periodResult"></div>
+       <input type="text" class="rl-search-input" id="searchPeriod" placeholder="搜索经期关心..." oninput="renderPeriodList()">
         <div class="rl-mood-list" id="periodList"></div>
         <div class="manage-list" id="manageListPeriod"></div>
       </div>
@@ -608,6 +616,7 @@
   <div class="settings-panel" id="settingsPanel">
     <div class="settings-header"><span class="settings-title">设置</span><button class="settings-close-btn" id="btnCloseSettings">×</button></div>
     <div class="settings-body">
+       <div id="settingsTabContainer"></div>
       <div class="settings-section">
         <div class="settings-section-title">我方信息（全局）</div>
         <div class="avatar-upload-row">
@@ -1324,9 +1333,9 @@ function createMessageEl(msg) {
     var missed = e.status === 'missed' || e.status === 'declined';
     var cls = 'call-bubble' + (missed ? ' missed' : '');
     var t2, s2;
-    if (e.status === 'completed') { t2 = '通话结束'; s2 = '时长 ' + formatDuration(e.duration || 0); }
-    else if (e.status === 'declined') { t2 = '已拒绝通话'; s2 = e.reason || ''; }
-    else if (e.status === 'missed') { t2 = '未接来电'; s2 = e.reason || ''; }
+      if (e.status === 'completed') { t2 = '通话时长'; s2 = formatDuration(e.duration || 0); }
+    else if (e.status === 'declined') { t2 = '已拒绝'; s2 = ''; }
+    else if (e.status === 'missed') { t2 = '未接来电'; s2 = ''; }
     else if (e.status === 'cancelled') { t2 = '已取消呼叫'; s2 = ''; }
     else { t2 = '语音通话'; s2 = ''; }
     bc = '<div class="' + cls + '"><div class="call-icon">📞</div><div class="call-info"><div class="call-title">' + escapeHtml(t2) + '</div>' + (s2 ? '<div class="call-sub">' + escapeHtml(s2) + '</div>' : '') + '</div></div>';
@@ -2961,7 +2970,70 @@ document.addEventListener('visibilitychange', function() {
     checkProactiveMessage();
   }
 });
-// ===== 启动 =====
+
+ // ===== 设置页面自动化分栏魔法 =====
+function initSettingsTabs() {
+  var container = document.getElementById('settingsTabContainer');
+  if (!container || container.innerHTML !== '') return;
+
+  // 1. 插入顶部的 Tab 按钮
+  container.innerHTML = `
+    <div class="settings-tabs">
+      <div class="settings-tab active" data-tab="layout">布局</div>
+      <div class="settings-tab" data-tab="chat">聊天行为</div>
+      <div class="settings-tab" data-tab="music">音乐</div>
+      <div class="settings-tab" data-tab="storage">存储</div>
+    </div>
+  `;
+
+  // 2. 找到所有的设置块，并根据标题自动分类
+  var sections = document.querySelectorAll('.settings-body > .settings-section');
+  sections.forEach(function(sec) {
+    var titleEl = sec.querySelector('.settings-section-title');
+    if (!titleEl) return;
+    var title = titleEl.textContent;
+
+    // 分配分类
+    if (title.includes('我方信息') || title.includes('纪念日') || title.includes('美化') || title.includes('月经') || title.includes('后台运行')) {
+      sec.setAttribute('data-group', 'layout');
+    } else if (title.includes('聊天行为') || title.includes('主动行为') || title.includes('拼接数量')) {
+      sec.setAttribute('data-group', 'chat');
+    } else if (title.includes('音乐')) {
+      sec.setAttribute('data-group', 'music');
+    } else if (title.includes('存储')) {
+      sec.setAttribute('data-group', 'storage');
+    } else {
+      sec.setAttribute('data-group', 'layout'); // 默认放布局
+    }
+  });
+
+  // 3. 点击 Tab 切换显示
+  var tabs = container.querySelectorAll('.settings-tab');
+  tabs.forEach(function(tab) {
+    tab.onclick = function() {
+      tabs.forEach(function(t){ t.classList.remove('active'); });
+      tab.classList.add('active');
+      var targetGroup = tab.dataset.tab;
+
+      sections.forEach(function(sec) {
+        if (sec.getAttribute('data-group') === targetGroup) {
+          sec.style.display = 'block';
+        } else {
+          sec.style.display = 'none';
+        }
+      });
+    };
+  });
+
+  // 4. 默认点一下第一个 Tab，让页面刷新一次状态
+  if (tabs.length > 0) tabs[0].click();
+}
+
+// 拦截打开设置面板的按钮，每次打开时初始化一次分栏
+document.getElementById('btnOpenSettings').addEventListener('click', function() {
+  setTimeout(initSettingsTabs, 50);
+});
+ // ===== 启动 =====
 (function bootstrap() {
   var forceTimer = setTimeout(function() {
     try {
