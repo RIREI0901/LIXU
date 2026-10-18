@@ -281,7 +281,7 @@
   .music-progress-bar { height: 100%; background: #333; border-radius: 2px; width: 0%; }
 
    /* 悬浮按钮 */
-  .music-float-btn { position: fixed; bottom: 80px; right: 20px; z-index: 100; background: #333; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: spinDisc 4s linear infinite; }
+  .music-float-btn { position: fixed; bottom: 120px; right: 20px; z-index: 100; background: #333; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: spinDisc 4s linear infinite; }
   .music-float-btn.hidden { display: none; }
   .music-disc { font-size: 24px; }
   @keyframes spinDisc { 100% { transform: rotate(360deg); } }
@@ -481,6 +481,7 @@
     .rl-tabs { width: 100%; justify-content: flex-start; margin: 6px 0; }
     .rl-tab { font-size: 11px; padding: 5px 10px; }
   }
+   .pat-message { align-self: center; text-align: center; margin: 4px 0; font-size: 12px; color: #999; padding: 4px 10px; line-height: 1.5; word-break: break-word; }
 </style>
 </head>
 <body>
@@ -855,8 +856,8 @@
     <div class="action-sheet" id="actionSheet"></div>
   </div>
 
-    <!-- 悬浮音乐按钮 -->
-  <div class="music-float-btn hidden" id="musicFloatBtn" onclick="document.getElementById('musicModal').classList.add('show')">
+     <!-- 悬浮音乐按钮 -->
+  <div class="music-float-btn hidden" id="musicFloatBtn">
     <div class="music-disc">💿</div>
   </div>
 
@@ -885,6 +886,10 @@
       </div>
 
       <div class="music-list" id="musicList" style="display:none;"></div>
+           <!-- 关闭悬浮球按钮 -->
+      <div style="text-align:center; margin-top:10px;">
+        <button class="settings-btn" style="background:#fee; color:#c53030; width:100%; border-radius:8px;" onclick="document.getElementById('musicFloatBtn').classList.add('hidden'); document.getElementById('musicModal').classList.remove('show');">❌ 关闭悬浮球</button>
+      </div>
     </div>
   </div>
   <audio id="audioEl"></audio>
@@ -1587,6 +1592,26 @@ function clearQuote() {
 }
 
 async function handlePatTap(mode, customText) {
+  if (!currentChatId) return;
+  var chat = await getChat(currentChatId);
+  var me = settingsCache.myName || '我';
+  var other = chat ? getChatName(chat) : 'TA';
+  var text;
+  
+  if (mode === 'normal') {
+    text = me + '拍了拍' + other + '的头';
+  } else if (mode === 'custom' && customText) {
+    var finalText = customText.replace(/\{me\}/g, me).replace(/\{other\}/g, other);
+    // 智能替换：字卡里的"我"变成你的名字，"你/对方"变成TA的名字
+    if (finalText === customText) {
+      finalText = finalText.replace(/我/g, me).replace(/你/g, other).replace(/对方/g, other);
+    }
+    text = finalText;
+  } else { return; }
+  
+  await addMessage(currentChatId, text, 'user', 'pat', null, { pat: true });
+  await renderMessages(); await renderHomeList();
+}
   if (!currentChatId) return;
   var chat = await getChat(currentChatId);
   var me = settingsCache.myName || '我';
@@ -3319,7 +3344,59 @@ document.getElementById('modalMask').onclick = function(e) { if (e.target === e.
 
 // 通话界面
 document.getElementById('callMinimizeBtn').onclick = minimizeCall;
-document.getElementById('callMiniBubble').onclick = restoreCall;
+// ===== 悬浮球通用拖拽逻辑 =====
+function makeBubbleDraggable(bubbleId, onClickAction) {
+  var bubble = document.getElementById(bubbleId);
+  if (!bubble) return;
+  var isDragging = false, hasMoved = false;
+  var startX, startY, initialLeft, initialTop;
+
+  function onDown(e) {
+    if (e.type === 'mousedown' && e.button !== 0) return;
+    var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    var rect = bubble.getBoundingClientRect();
+    startX = clientX; startY = clientY;
+    initialLeft = rect.left; initialTop = rect.top;
+    bubble.style.left = rect.left + 'px';
+    bubble.style.top = rect.top + 'px';
+    bubble.style.right = 'auto'; bubble.style.bottom = 'auto';
+    isDragging = true; hasMoved = false;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, {passive: false});
+    document.addEventListener('touchend', onUp);
+  }
+  function onMove(e) {
+    if (!isDragging) return;
+    var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    var dx = clientX - startX, dy = clientY - startY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      hasMoved = true;
+      if (e.type === 'touchmove' && e.cancelable) e.preventDefault();
+    }
+    var maxLeft = window.innerWidth - bubble.offsetWidth;
+    var maxTop = window.innerHeight - bubble.offsetHeight;
+    bubble.style.left = Math.max(0, Math.min(initialLeft + dx, maxLeft)) + 'px';
+    bubble.style.top = Math.max(0, Math.min(initialTop + dy, maxTop)) + 'px';
+  }
+  function onUp(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+    if (!hasMoved && onClickAction) onClickAction();
+  }
+  bubble.addEventListener('mousedown', onDown);
+  bubble.addEventListener('touchstart', onDown, {passive: false});
+}
+
+// 初始化这两个悬浮球
+makeBubbleDraggable('musicFloatBtn', function() { document.getElementById('musicModal').classList.add('show'); });
+makeBubbleDraggable('callMiniBubble', function() { restoreCall(); });
 
 // 月经日历
 var calCurrentDate = new Date();
