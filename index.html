@@ -3228,8 +3228,7 @@ document.getElementById('recallProbSlider').oninput = async function(e) { var v 
 document.getElementById('showRecallToggle').onclick = async function() { var t = document.getElementById('showRecallToggle'); t.classList.toggle('on'); await setSetting('showRecallContent', t.classList.contains('on')); };
 document.getElementById('readIgnoreToggle').onclick = async function() { var t = document.getElementById('readIgnoreToggle'); t.classList.toggle('on'); var on = t.classList.contains('on'); await setSetting('readIgnoreOn', on); document.getElementById('readIgnoreProbRow').style.display = on ? 'flex' : 'none'; };
 document.getElementById('readIgnoreProbSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('readIgnoreProbValue').textContent = v + '%'; await setSetting('readIgnoreProb', v); };
-document.getElementById('chatCardSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('chatCardValue').textContent = v + ' 张'; await setSetting('chatCardMax', v); };
-document.getElementById('letterCardSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('letterCardValue').textContent = v + ' 张'; await setSetting('letterCardMax', v); };
+
 document.getElementById('defaultCycleInput').onchange = async function(e) { var v = Math.max(20, Math.min(45, parseInt(e.target.value) || 28)); e.target.value = v; await setSetting('defaultCycle', v); };
 document.getElementById('defaultPeriodInput').onchange = async function(e) { var v = Math.max(2, Math.min(10, parseInt(e.target.value) || 5)); e.target.value = v; await setSetting('defaultPeriod', v); };
 document.getElementById('recentCycleCountInput').onchange = async function(e) { var v = Math.max(2, Math.min(12, parseInt(e.target.value) || 3)); e.target.value = v; await setSetting('recentCycleCount', v); };
