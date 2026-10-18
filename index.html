@@ -718,7 +718,7 @@
             <div class="delay-range-line"><span class="delay-range-label">最慢</span><input type="range" class="settings-slider" id="replyDelayMaxSlider" min="0" max="1500" value="10" style="flex:1;"><span class="delay-range-value" id="replyDelayMaxValue">10s</span></div>
           </div>
         </div>
-        <div class="settings-row"><div><div class="settings-label">允许拼字卡</div></div><div class="settings-toggle on" id="enableWordcardToggle"></div></div>
+      <div class="settings-row"><div><div class="settings-label">允许拼字卡概率</div><div class="settings-desc">触发后才会回复字卡</div></div><div style="display:flex;align-items:center;gap:8px"><input type="range" class="settings-slider" id="wordcardProbSlider" min="0" max="100" value="50"><span class="settings-value" id="wordcardProbValue">50%</span></div></div>
       </div>
 
       <div class="settings-section">
@@ -737,10 +737,22 @@
         <div class="settings-row" id="readIgnoreProbRow" style="display:none;"><div><div class="settings-label">已读不回概率</div></div><div style="display:flex;align-items:center;gap:8px"><input type="range" class="settings-slider" id="readIgnoreProbSlider" min="0" max="100" value="50"><span class="settings-value" id="readIgnoreProbValue">50%</span></div></div>
       </div>
 
-      <div class="settings-section">
+           <div class="settings-section">
         <div class="settings-section-title">字卡拼接数量</div>
-        <div class="settings-row"><div><div class="settings-label">聊天拼字卡</div></div><div style="display:flex;align-items:center;gap:8px"><input type="range" class="settings-slider" id="chatCardSlider" min="2" max="10" value="2"><span class="settings-value" id="chatCardValue">2 张</span></div></div>
-        <div class="settings-row"><div><div class="settings-label">信件拼字卡</div></div><div style="display:flex;align-items:center;gap:8px"><input type="range" class="settings-slider" id="letterCardSlider" min="2" max="20" value="2"><span class="settings-value" id="letterCardValue">2 张</span></div></div>
+        <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:10px;">
+          <div><div class="settings-label">聊天拼字卡</div></div>
+          <div class="delay-range-row">
+            <div class="delay-range-line"><span class="delay-range-label">最少</span><input type="range" class="settings-slider" id="chatCardMinSlider" min="2" max="10" value="2" style="flex:1;"><span class="delay-range-value" id="chatCardMinValue">2 张</span></div>
+            <div class="delay-range-line"><span class="delay-range-label">最多</span><input type="range" class="settings-slider" id="chatCardMaxSlider" min="2" max="10" value="2" style="flex:1;"><span class="delay-range-value" id="chatCardMaxValue">2 张</span></div>
+          </div>
+        </div>
+        <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:10px; margin-top:16px;">
+          <div><div class="settings-label">信件拼字卡</div></div>
+          <div class="delay-range-row">
+            <div class="delay-range-line"><span class="delay-range-label">最少</span><input type="range" class="settings-slider" id="letterCardMinSlider" min="2" max="20" value="2" style="flex:1;"><span class="delay-range-value" id="letterCardMinValue">2 张</span></div>
+            <div class="delay-range-line"><span class="delay-range-label">最多</span><input type="range" class="settings-slider" id="letterCardMaxSlider" min="2" max="20" value="2" style="flex:1;"><span class="delay-range-value" id="letterCardMaxValue">2 张</span></div>
+          </div>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -1656,15 +1668,22 @@ async function handleClearChat() {
 }
 
 // ===== 拼字卡 =====
-async function buildWordcardMessage(maxCount) {
+async function buildWordcardMessage(minCount, maxCount) {
   var cards = await getAllWordcards();
   if (!cards.length) return null;
   var pool = cards.map(function(c){ return c.text; }).filter(function(t){ return t && t.trim(); });
   if (!pool.length) return null;
-  var max = Math.min(Math.max(2, maxCount || 2), 20);
+  
+  var min = parseInt(minCount, 10) || 2;
+  var max = parseInt(maxCount, 10) || 2;
+  if (min > max) { var temp = min; min = max; max = temp; } // 防止滑块反过来
+  
+  min = Math.min(min, pool.length);
   max = Math.min(max, pool.length);
-  if (max < 2) return pool[0];
-  var n = 2 + Math.floor(Math.random() * (max - 1));
+  if (max < 1) return null;
+  if (max === 1) return pool[Math.floor(Math.random() * pool.length)];
+  
+  var n = min + Math.floor(Math.random() * (max - min + 1));
   var copy = pool.slice(), picked = [];
   for (var i = 0; i < n && copy.length; i++) { var idx = Math.floor(Math.random() * copy.length); picked.push(copy.splice(idx, 1)[0]); }
   return picked.join('');
@@ -1715,8 +1734,11 @@ async function handleSend() {
 
   setTyping(true);
   setTimeout(async function() {
-    var replyText = null;
-    if (settingsCache.enableWordcard !== false) replyText = await buildWordcardMessage(settingsCache.chatCardMax || 2);
+       var replyText = null;
+    var wp = settingsCache.wordcardProb !== undefined ? settingsCache.wordcardProb : 50;
+    if (Math.random() * 100 < wp) {
+      replyText = await buildWordcardMessage(settingsCache.chatCardMin || 2, settingsCache.chatCardMax || 2);
+    }
     if (!replyText) { setTyping(false); return; }
 
     // 对方撤回判定
@@ -2243,7 +2265,8 @@ function triggerLetterReply(chatId, title, content, threadId) {
     var pool = cards.map(function(c){ return c.text; }).filter(function(t){ return t && t.trim(); });
     if (!pool.length) return;
     
-    var replyContent = pool[Math.floor(Math.random() * pool.length)];
+        var replyContent = await buildWordcardMessage(settingsCache.letterCardMin || 2, settingsCache.letterCardMax || 2);
+    if (!replyContent) replyContent = '收到啦~';
     
     // 带上 threadId，这样回信才能串在一起形成对话！
     await addMessage(chatId, '', 'other', 'letter', null, { 
@@ -2559,11 +2582,16 @@ async function loadSettingsToUI() {
   document.getElementById('replyDelayMinValue').textContent = v('replyDelayMin', 1) + 's';
   document.getElementById('replyDelayMaxSlider').value = v('replyDelayMax', 10);
   document.getElementById('replyDelayMaxValue').textContent = v('replyDelayMax', 10) + 's';
-  document.getElementById('enableWordcardToggle').classList.toggle('on', settingsCache.enableWordcard !== false);
-  document.getElementById('chatCardSlider').value = v('chatCardMax', 2);
-  document.getElementById('chatCardValue').textContent = v('chatCardMax', 2) + ' 张';
-  document.getElementById('letterCardSlider').value = v('letterCardMax', 2);
-  document.getElementById('letterCardValue').textContent = v('letterCardMax', 2) + ' 张';
+   document.getElementById('wordcardProbSlider').value = v('wordcardProb', 50);
+  document.getElementById('wordcardProbValue').textContent = v('wordcardProb', 50) + '%';
+  document.getElementById('chatCardMinSlider').value = v('chatCardMin', 2);
+  document.getElementById('chatCardMinValue').textContent = v('chatCardMin', 2) + ' 张';
+  document.getElementById('chatCardMaxSlider').value = v('chatCardMax', 2);
+  document.getElementById('chatCardMaxValue').textContent = v('chatCardMax', 2) + ' 张';
+  document.getElementById('letterCardMinSlider').value = v('letterCardMin', 2);
+  document.getElementById('letterCardMinValue').textContent = v('letterCardMin', 2) + ' 张';
+  document.getElementById('letterCardMaxSlider').value = v('letterCardMax', 2);
+  document.getElementById('letterCardMaxValue').textContent = v('letterCardMax', 2) + ' 张';
   document.getElementById('transferProbSlider').value = v('transferProb', 50);
   document.getElementById('transferProbValue').textContent = v('transferProb', 50) + '%';
   document.getElementById('callProbSlider').value = v('callProb', 50);
@@ -3183,7 +3211,11 @@ document.getElementById('myDefaultAvatarInput').onchange = function(e) {
 document.getElementById('myNameInput').onchange = async function(e) { await setSetting('myName', e.target.value || '我'); };
 document.getElementById('replyDelayMinSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('replyDelayMinValue').textContent = v + 's'; await setSetting('replyDelayMin', v); };
 document.getElementById('replyDelayMaxSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('replyDelayMaxValue').textContent = v + 's'; await setSetting('replyDelayMax', v); };
-document.getElementById('enableWordcardToggle').onclick = async function() { var t = document.getElementById('enableWordcardToggle'); t.classList.toggle('on'); await setSetting('enableWordcard', t.classList.contains('on')); };
+document.getElementById('wordcardProbSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('wordcardProbValue').textContent = v + '%'; await setSetting('wordcardProb', v); };
+document.getElementById('chatCardMinSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('chatCardMinValue').textContent = v + ' 张'; await setSetting('chatCardMin', v); };
+document.getElementById('chatCardMaxSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('chatCardMaxValue').textContent = v + ' 张'; await setSetting('chatCardMax', v); };
+document.getElementById('letterCardMinSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('letterCardMinValue').textContent = v + ' 张'; await setSetting('letterCardMin', v); };
+document.getElementById('letterCardMaxSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('letterCardMaxValue').textContent = v + ' 张'; await setSetting('letterCardMax', v); };
 document.getElementById('transferProbSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('transferProbValue').textContent = v + '%'; await setSetting('transferProb', v); };
 document.getElementById('callProbSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('callProbValue').textContent = v + '%'; await setSetting('callProb', v); };
 document.getElementById('acceptProbSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('acceptProbValue').textContent = v + '%'; await setSetting('acceptProb', v); };
