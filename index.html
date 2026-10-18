@@ -614,7 +614,8 @@
       <button class="rl-close-btn" onclick="document.getElementById('letterCenterPanel').classList.remove('show')">×</button>
     </div>
     <div class="rl-body">
-      <div id="letterListContainer"></div>
+           <button class="rl-btn rl-btn-primary" style="width:100%; margin-bottom: 16px; padding: 12px; font-size: 15px; border-radius: 8px;" onclick="openLetterEditor()">✉ 写一封新信</button>
+     <div id="letterListContainer"></div>
     </div>
   </div>
 
@@ -2216,24 +2217,38 @@ async function openLetterEditor(opts) {
     triggerLetterReply(chatId, t, c, threadId);
   };
 }
- function triggerLetterReply(chatId, title, content) {
+function triggerLetterReply(chatId, title, content, threadId) {
   var hours = settingsCache.letterReplyHour !== undefined ? settingsCache.letterReplyHour : 4;
   var delayMs = hours * 3600 * 1000;
   // 模拟：为了可测试，强制最小 5 秒延迟（真实时间太长会让人以为没反应）
   var realDelay = Math.max(delayMs, 5000);
-  // 但若用户设置的范围确实大，按设置来。为了演示，允许长延迟。
-  // 用短延迟测试用户可按滑块到 1 小时；我们这里直接按小时来
+  
   setTimeout(async function() {
     var cards = await getAllWordcards();
     if (!cards.length) return;
     var pool = cards.map(function(c){ return c.text; }).filter(function(t){ return t && t.trim(); });
     if (!pool.length) return;
+    
     var replyContent = pool[Math.floor(Math.random() * pool.length)];
-    await addMessage(chatId, '', 'other', 'letter', null, { title: '回信：' + title.replace(/^回信：/, ''), content: replyContent, isReply: true });
-    await addMessage(chatId, '对方给我方回信了', 'other', 'letter-tip', null, { tip: true });
-    if (currentChatId === chatId) await renderMessages();
+    
+    // 带上 threadId，这样回信才能串在一起形成对话！
+    await addMessage(chatId, '', 'other', 'letter', null, { 
+      title: '回信：' + title.replace(/^回信：/, ''), 
+      content: replyContent, 
+      isReply: true,
+      threadId: threadId 
+    });
+    
     await renderHomeList();
     notify(settingsCache.otherName || 'TA', '给你回了一封信');
+    
+    // 如果用户正在看信箱，实时刷新一下列表和详情
+    if (document.getElementById('letterCenterPanel').classList.contains('show')) {
+      renderLetterCenter();
+    }
+    if (document.getElementById('letterDetailMask').classList.contains('show')) {
+      openLetterDetail(threadId);
+    }
   }, realDelay);
 }
 
