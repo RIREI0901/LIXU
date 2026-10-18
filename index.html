@@ -489,6 +489,28 @@
   .settings-music-name:hover { color: #b45309; text-decoration: underline; }
   .settings-music-del { background: none; border: none; color: #c53030; cursor: pointer; font-size: 13px; padding: 4px 8px; border-radius: 4px; }
   .settings-music-del:hover { background: #ffe5e5; }
+  /* P1 的字卡标签和搜索框 */
+  #rlGroupTabsWrap {
+    margin-top: 16px; margin-bottom: 12px; overflow-x: auto; white-space: nowrap;
+    -webkit-overflow-scrolling: touch; padding-bottom: 4px; display: block !important;
+  }
+  #rlGroupTabsWrap::-webkit-scrollbar { display: none; }
+  #rlGroupTabs { display: flex !important; flex-wrap: nowrap !important; gap: 8px; }
+  .rl-group-tab {
+    padding: 8px 16px; border-radius: 999px !important; background: #fff !important;
+    color: #666 !important; font-size: 13px; cursor: pointer; flex-shrink: 0 !important;
+    user-select: none; transition: all 0.2s; white-space: nowrap !important; border: 1px solid #e0e0e0 !important;
+  }
+  .rl-group-tab.active {
+    background: #1a1a1a !important; color: #fff !important;
+    border-color: #1a1a1a !important; font-weight: 500;
+  }
+  .rl-search-input {
+    width: 100%; padding: 12px 16px 12px 40px; margin-bottom: 16px;
+    border-radius: 12px; border: 1px solid #e0e0e0;
+    background: #f9f9f9 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center;
+    font-size: 14px; outline: none;
+  }
 </style>
 </head>
 <body>
@@ -2024,7 +2046,7 @@ function parseReplyText(text) {
   }
   return groups;
 }
-var currentWordcardGroup = null;
+var currentWordcardGroup = '全部';
 async function renderReplyGroups() {
   var all = await getAllWordcards();
   var container = document.getElementById('rlGroups');
@@ -2046,15 +2068,28 @@ async function renderReplyGroups() {
   });
   
   var groupNames = Object.keys(groups);
-  if (!currentWordcardGroup || !groups[currentWordcardGroup]) {
-    currentWordcardGroup = groupNames[0];
+  
+  if (currentWordcardGroup !== '全部' && !groups[currentWordcardGroup]) {
+    currentWordcardGroup = '全部';
   }
 
   tabsEl.innerHTML = '';
+  
+  // 渲染“全部”
+  var allTab = document.createElement('div');
+  allTab.className = 'rl-group-tab' + (currentWordcardGroup === '全部' ? ' active' : '');
+  allTab.textContent = '全部 (' + all.length + ')';
+  allTab.onclick = function() {
+    currentWordcardGroup = '全部';
+    renderReplyGroups();
+  };
+  tabsEl.appendChild(allTab);
+
+  // 渲染其他分组
   groupNames.forEach(function(g) {
     var tab = document.createElement('div');
     tab.className = 'rl-group-tab' + (g === currentWordcardGroup ? ' active' : '');
-    tab.textContent = g;
+    tab.textContent = g + ' (' + groups[g].length + ')';
     tab.onclick = function() {
       currentWordcardGroup = g;
       renderReplyGroups();
@@ -2062,7 +2097,8 @@ async function renderReplyGroups() {
     tabsEl.appendChild(tab);
   });
   
-  var currentList = groups[currentWordcardGroup] || [];
+  var currentList = currentWordcardGroup === '全部' ? all : (groups[currentWordcardGroup] || []);
+
   var keyword = (document.getElementById('searchCards')?.value || '').trim().toLowerCase();
   if (keyword) {
     currentList = currentList.filter(function(item) {
