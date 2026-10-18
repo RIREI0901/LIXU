@@ -228,7 +228,22 @@
   .letter-reply-btn { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #d7ccc8; font-size: 12px; color: #8d6e63; text-align: center; cursor: pointer; display: none; }
   .letter-bubble.expanded .letter-reply-btn { display: block; }
 
-  /* 设置 */
+    /* 信箱列表 */
+  .letter-item-card { background: #f8f8f8; border-radius: 12px; padding: 16px; margin-bottom: 12px; cursor: pointer; border: 1px solid #f0f0f0; }
+  .letter-item-card:hover { background: #f0f0f0; }
+  .letter-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .letter-item-title { font-size: 15px; font-weight: 600; color: #333; }
+  .letter-item-time { font-size: 12px; color: #999; }
+  .letter-item-preview { font-size: 13px; color: #666; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  
+  /* 信件详情对话流 */
+  .letter-msg-box { padding: 12px 16px; border-radius: 12px; margin-bottom: 12px; font-size: 14px; line-height: 1.6; position: relative; }
+  .letter-msg-box.me { background: #fff8e1; color: #5d4037; margin-right: 20px; border-bottom-right-radius: 2px; border: 1px solid #f0d98b; }
+  .letter-msg-box.other { background: #fff; color: #333; margin-left: 20px; border-bottom-left-radius: 2px; border: 1px solid #e0e0e0; }
+  .letter-msg-title { font-weight: 600; margin-bottom: 6px; font-size: 15px; }
+  .letter-msg-time { font-size: 11px; color: #999; text-align: right; margin-top: 6px; }
+  .letter-msg-box.me .letter-msg-time { color: #a1887f; }
+ /* 设置 */
   .settings-section { margin-bottom: 24px; }
   .settings-section-title { font-size: 14px; font-weight: 500; color: #333; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
   .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; gap: 12px; flex-wrap: wrap; }
@@ -588,7 +603,33 @@
     </div>
   </div>
 
-  <!-- 会话头像昵称 & 钱包设置面板 -->
+   <!-- 信箱中心面板 -->
+  <div class="reply-library-panel" id="letterCenterPanel">
+    <div class="rl-header">
+      <span class="rl-title">信箱</span>
+      <div class="rl-tabs">
+        <span class="rl-tab active" id="tabSentLetters" onclick="switchLetterTab('sent')">发出的信</span>
+        <span class="rl-tab" id="tabReceivedLetters" onclick="switchLetterTab('received')">收到的信</span>
+      </div>
+      <button class="rl-close-btn" onclick="document.getElementById('letterCenterPanel').classList.remove('show')">×</button>
+    </div>
+    <div class="rl-body">
+      <div id="letterListContainer"></div>
+    </div>
+  </div>
+
+  <!-- 信件详情弹窗 -->
+  <div class="modal-mask" id="letterDetailMask">
+    <div class="modal letter-modal" style="max-height:85vh; display:flex; flex-direction:column;">
+      <div class="modal-header" id="letterDetailTitle">信件详情</div>
+      <div class="modal-body" id="letterDetailBody" style="overflow-y:auto; flex:1; padding:16px; background:#f9f9f9;"></div>
+      <div class="modal-footer">
+        <div class="modal-btn cancel" onclick="document.getElementById('letterDetailMask').classList.remove('show')">关闭</div>
+        <div class="modal-btn" id="letterReplyBtn" style="background:#333;color:#fff;">回信</div>
+      </div>
+    </div>
+  </div>
+ <!-- 会话头像昵称 & 钱包设置面板 -->
   <div class="chat-profile-panel" id="chatProfilePanel">
     <div class="cp-header">
       <span class="cp-title">头像与昵称 · 钱包</span>
@@ -1307,8 +1348,18 @@ async function renderMessages() {
   var msgs = await getMessages(currentChatId);
   var container = document.getElementById('messages');
   container.innerHTML = '';
-  if (!msgs.length) container.innerHTML = '<div class="empty-state"><div class="empty-state-text">暂无消息，发送第一条吧</div></div>';
-  else for (var i = 0; i < msgs.length; i++) container.appendChild(createMessageEl(msgs[i]));
+  
+  // 过滤掉 letter 和 letter-tip，不在聊天界面显示
+  var visibleMsgs = msgs.filter(function(m) { return m.type !== 'letter' && m.type !== 'letter-tip'; });
+  
+  if (!visibleMsgs.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-text">暂无消息，发送第一条吧</div></div>';
+  } else {
+    for (var i = 0; i < visibleMsgs.length; i++) {
+      container.appendChild(createMessageEl(visibleMsgs[i]));
+    }
+  }
+  
   var typing = document.createElement('div');
   typing.className = 'typing-indicator' + (isTyping ? ' show' : '');
   typing.id = 'typingIndicator';
@@ -2130,24 +2181,42 @@ async function openLetterEditor(opts) {
   mm.querySelector('.modal').className = 'modal letter-modal';
   document.getElementById('modalTitle').textContent = opts.replyTo ? '写回信' : '写一封信';
   document.getElementById('modalBody').innerHTML = '<input type="text" id="letterTitle" placeholder="信件标题"><textarea id="letterContent" placeholder="写下你想说的话..."></textarea>';
-  document.getElementById('letterTitle').value = opts.replyTo ? ('回信：' + opts.replyTo) : '';
+  document.getElementById('letterTitle').value = opts.replyTo ? ('回复：' + opts.title) : '';
   document.getElementById('modalOk').textContent = '发送';
   mm.classList.add('show');
+  
   document.getElementById('modalOk').onclick = async function() {
-    var t = document.getElementById('letterTitle').value.trim() || '一封来信';
+    var t = document.getElementById('letterTitle').value.trim() || '无题';
     var c = document.getElementById('letterContent').value.trim();
     if (!c) { alert('请填写内容'); return; }
+    
     var chatId = currentChatId;
-    await addMessage(chatId, '', 'user', 'letter', null, { title: t, content: c, status: '已送达' });
-    // 信件提示
-    await addMessage(chatId, '我方给对方寄了封信', 'user', 'letter-tip', null, { tip: true });
-    await renderMessages(); await renderHomeList();
+    // 如果是回信，带上 threadId，否则新建一个
+    var threadId = opts.threadId || ('thread_' + Date.now());
+    
+    // 保存信件，不再保存提示消息
+    await addMessage(chatId, '', 'user', 'letter', null, { 
+      title: t, content: c, isReply: !!opts.replyTo, threadId: threadId 
+    });
+    
+    // 更新聊天界面最后一条预览（可选）
+    await renderHomeList();
     hideModal();
     document.getElementById('modalOk').onclick = hideModal;
-    triggerLetterReply(chatId, t, c);
+    
+    // 如果在详情弹窗里，刷新一下详情
+    if (document.getElementById('letterDetailMask').classList.contains('show')) {
+      openLetterDetail(threadId);
+    } else {
+      // 否则打开信箱查看
+      openLetterCenter();
+    }
+    
+    // 触发对方的自动回信逻辑
+    triggerLetterReply(chatId, t, c, threadId);
   };
 }
-function triggerLetterReply(chatId, title, content) {
+ function triggerLetterReply(chatId, title, content) {
   var hours = settingsCache.letterReplyHour !== undefined ? settingsCache.letterReplyHour : 4;
   var delayMs = hours * 3600 * 1000;
   // 模拟：为了可测试，强制最小 5 秒延迟（真实时间太长会让人以为没反应）
@@ -2168,7 +2237,116 @@ function triggerLetterReply(chatId, title, content) {
   }, realDelay);
 }
 
-async function openPatPicker() {
+// ===== 全新的信箱交互系统 =====
+var currentLetterTab = 'sent';
+
+function openLetterCenter() {
+  document.getElementById('letterCenterPanel').classList.add('show');
+  switchLetterTab('sent');
+}
+
+function switchLetterTab(tab) {
+  currentLetterTab = tab;
+  document.getElementById('tabSentLetters').classList.toggle('active', tab === 'sent');
+  document.getElementById('tabReceivedLetters').classList.toggle('active', tab === 'received');
+  renderLetterCenter();
+}
+
+async function renderLetterCenter() {
+  if (!currentChatId) return;
+  var msgs = await getMessages(currentChatId);
+  var letters = msgs.filter(function(m) { return m.type === 'letter' && !m.recalled; });
+  
+  // 按 threadId 分组
+  var threads = {};
+  letters.forEach(function(m) {
+    var tid = m.extraData.threadId || m.id; // 兼容旧数据
+    if (!threads[tid]) threads[tid] = [];
+    threads[tid].push(m);
+  });
+  
+  var sentList = [], receivedList = [];
+  for (var tid in threads) {
+    var threadMsgs = threads[tid].sort(function(a,b){ return a.createdAt - b.createdAt; });
+    var firstMsg = threadMsgs[0];
+    var lastMsg = threadMsgs[threadMsgs.length - 1];
+    var isSent = firstMsg.sender === 'user'; // 我发的信就是发出的信
+    var item = { threadId: tid, firstMsg: firstMsg, lastMsg: lastMsg, count: threadMsgs.length };
+    if (isSent) sentList.push(item);
+    else receivedList.push(item);
+  }
+  
+  // 排序按最新一封的时间
+  sentList.sort(function(a,b){ return b.lastMsg.createdAt - a.lastMsg.createdAt; });
+  receivedList.sort(function(a,b){ return b.lastMsg.createdAt - a.lastMsg.createdAt; });
+  
+  var list = currentLetterTab === 'sent' ? sentList : receivedList;
+  var container = document.getElementById('letterListContainer');
+  
+  if (!list.length) {
+    container.innerHTML = '<div class="rl-empty">暂无信件</div>';
+    return;
+  }
+  
+  container.innerHTML = '';
+  list.forEach(function(item) {
+    var div = document.createElement('div');
+    div.className = 'letter-item-card';
+    var timeStr = formatFullTime(item.lastMsg.createdAt);
+    var previewText = item.lastMsg.extraData.content.replace(/\n/g, ' ');
+    div.innerHTML = 
+      '<div class="letter-item-header">' +
+        '<div class="letter-item-title">' + escapeHtml(item.firstMsg.extraData.title) + '</div>' +
+        '<div class="letter-item-time">' + timeStr + '</div>' +
+      '</div>' +
+      '<div class="letter-item-preview">' + escapeHtml(previewText) + '</div>' +
+      (item.count > 1 ? '<div style="font-size:11px;color:#999;margin-top:6px;">共 ' + item.count + ' 封往来</div>' : '');
+    
+    div.onclick = function() { openLetterDetail(item.threadId); };
+    container.appendChild(div);
+  });
+}
+
+async function openLetterDetail(threadId) {
+  var msgs = await getMessages(currentChatId);
+  var threadMsgs = msgs.filter(function(m) { return m.type === 'letter' && !m.recalled && (m.extraData.threadId === threadId || m.id === threadId); }).sort(function(a,b){ return a.createdAt - b.createdAt; });
+  if (!threadMsgs.length) return;
+  
+  var title = threadMsgs[0].extraData.title.replace(/^回复：/, '').replace(/^回信：/, '');
+  document.getElementById('letterDetailTitle').textContent = title;
+  
+  var bodyEl = document.getElementById('letterDetailBody');
+  bodyEl.innerHTML = '';
+  
+  threadMsgs.forEach(function(m) {
+    var isMe = m.sender === 'user';
+    var box = document.createElement('div');
+    box.className = 'letter-msg-box ' + (isMe ? 'me' : 'other');
+    box.innerHTML = 
+      '<div class="letter-msg-title">' + escapeHtml(m.extraData.title) + '</div>' +
+      '<div class="letter-msg-content">' + escapeHtml(m.extraData.content) + '</div>' +
+      '<div class="letter-msg-time">' + formatFullTime(m.createdAt) + '</div>';
+    bodyEl.appendChild(box);
+  });
+  
+  // 绑定回信按钮
+  var lastMsg = threadMsgs[threadMsgs.length - 1];
+  var replyBtn = document.getElementById('letterReplyBtn');
+  // 如果最后一封信是对方发的，才能回信
+  if (lastMsg.sender === 'other') {
+    replyBtn.style.display = 'block';
+    replyBtn.onclick = function() {
+      document.getElementById('letterDetailMask').classList.remove('show');
+      openLetterEditor({ replyTo: true, threadId: threadId, title: title });
+    };
+  } else {
+    replyBtn.style.display = 'none'; // 如果是我发的最后一条，等待对方回信中...
+  }
+  
+  document.getElementById('letterDetailMask').classList.add('show');
+}
+ 
+ async function openPatPicker() {
   if (!currentChatId) return;
   var list = await getPatList();
   var panel = document.getElementById('patPickerPanel');
@@ -2463,7 +2641,7 @@ document.querySelectorAll('.extra-item').forEach(function(item) {
   item.onclick = function() {
     var type = item.dataset.type;
     document.getElementById('extraPanel').classList.remove('show');
-    if (type === 'letter') openLetterEditor();
+    if (type === 'letter') openLetterCenter();
     else if (type === 'transfer') openTransferEditor();
     else if (type === 'image') document.getElementById('emojiFileInput').click();
     else if (type === 'period') openPeriodPanel();
