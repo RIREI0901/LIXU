@@ -1854,33 +1854,90 @@ function parseReplyText(text) {
   }
   return groups;
 }
+var currentWordcardGroup = null;
 async function renderReplyGroups() {
   var all = await getAllWordcards();
   var container = document.getElementById('rlGroups');
-  if (!all.length) { container.innerHTML = '<div class="rl-empty">暂无字卡，导入一些吧~</div>'; return; }
-  var groups = {};
-  all.forEach(function(r) { if (!groups[r.group]) groups[r.group] = []; groups[r.group].push(r); });
-  var html = '';
-  for (var g in groups) {
-    if (!groups.hasOwnProperty(g)) continue;
-    html += '<div class="rl-group-item"><div class="rl-group-name">' + escapeHtml(g) + '<span class="rl-group-count">' + groups[g].length + ' 条</span></div><div class="rl-group-list">' + groups[g].map(function(r){return escapeHtml(r.text);}).join('<br>') + '</div></div>';
+  var tabsWrap = document.getElementById('rlGroupTabsWrap');
+  var tabsEl = document.getElementById('rlGroupTabs');
+  
+  if (!all.length) {
+    if (tabsWrap) tabsWrap.style.display = 'none';
+    container.innerHTML = '<div class="rl-empty">暂无字卡，导入一些吧~</div>';
+    return;
   }
+  if (tabsWrap) tabsWrap.style.display = 'block';
+
+  var groups = {};
+  all.forEach(function(r) {
+    var g = r.group || '默认';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(r);
+  });
+  
+  var groupNames = Object.keys(groups);
+  if (!currentWordcardGroup || !groups[currentWordcardGroup]) {
+    currentWordcardGroup = groupNames[0];
+  }
+
+  tabsEl.innerHTML = '';
+  groupNames.forEach(function(g) {
+    var tab = document.createElement('div');
+    tab.className = 'rl-group-tab' + (g === currentWordcardGroup ? ' active' : '');
+    tab.textContent = g;
+    tab.onclick = function() {
+      currentWordcardGroup = g;
+      renderReplyGroups();
+    };
+    tabsEl.appendChild(tab);
+  });
+  
+  var currentList = groups[currentWordcardGroup] || [];
+  var keyword = (document.getElementById('searchCards')?.value || '').trim().toLowerCase();
+  if (keyword) {
+    currentList = currentList.filter(function(item) {
+      return item.text.toLowerCase().includes(keyword);
+    });
+  }
+
+  var html = '<div style="margin-bottom:12px;font-size:14px;font-weight:500;color:#333;">' + escapeHtml(currentWordcardGroup) + '<span style="font-size:12px;color:#999;float:right;font-weight:normal;">' + currentList.length + ' 条</span></div>';
+  html += '<div class="rl-group-card-list">';
+  if (currentList.length === 0) {
+    html += '<div class="rl-empty" style="padding:20px 0;">没有找到相关字卡</div>';
+  } else {
+    currentList.forEach(function(r) {
+      html += '<div class="rl-group-card-item">' + escapeHtml(r.text) + '</div>';
+    });
+  }
+  html += '</div>';
   container.innerHTML = html;
 }
 async function renderMoodList() {
   var m = await getMoodList();
   var el = document.getElementById('moodList'); if (!el) return;
-  el.innerHTML = m.length ? m.map(function(x){ return '<span class="rl-mood-item">' + escapeHtml(x) + '</span>'; }).join('') : '<div class="rl-mood-empty">还没有状态词</div>';
+  var keyword = (document.getElementById('searchMood')?.value || '').trim().toLowerCase();
+  if (keyword) {
+    m = m.filter(function(x) { return x.toLowerCase().includes(keyword); });
+  }
+  el.innerHTML = m.length ? m.map(function(x){ return '<span class="rl-mood-item">' + escapeHtml(x) + '</span>'; }).join('') : '<div class="rl-mood-empty">没有找到相关内容</div>';
 }
 async function renderPatList() {
   var l = await getPatList();
   var el = document.getElementById('patList'); if (!el) return;
-  el.innerHTML = l.length ? l.map(function(x){ return '<span class="rl-mood-item" style="background:#e8f0fe;color:#1a73e8;border-color:#a8c7fa;">' + escapeHtml(x) + '</span>'; }).join('') : '<div class="rl-mood-empty">还没有拍一拍文案</div>';
+  var keyword = (document.getElementById('searchPat')?.value || '').trim().toLowerCase();
+  if (keyword) {
+    l = l.filter(function(x) { return x.toLowerCase().includes(keyword); });
+  }
+  el.innerHTML = l.length ? l.map(function(x){ return '<span class="rl-mood-item" style="background:#e8f0fe;color:#1a73e8;border-color:#a8c7fa;">' + escapeHtml(x) + '</span>'; }).join('') : '<div class="rl-mood-empty">没有找到相关内容</div>';
 }
 async function renderPeriodList() {
   var l = await getPeriodCareList();
   var el = document.getElementById('periodList'); if (!el) return;
-  el.innerHTML = l.length ? l.map(function(x){ return '<span class="rl-mood-item" style="background:#fce4ec;color:#c2185b;border-color:#f8bbd0;">' + escapeHtml(x) + '</span>'; }).join('') : '<div class="rl-mood-empty">还没有经期关心文案</div>';
+  var keyword = (document.getElementById('searchPeriod')?.value || '').trim().toLowerCase();
+  if (keyword) {
+    l = l.filter(function(x) { return x.toLowerCase().includes(keyword); });
+  }
+  el.innerHTML = l.length ? l.map(function(x){ return '<span class="rl-mood-item" style="background:#fce4ec;color:#c2185b;border-color:#f8bbd0;">' + escapeHtml(x) + '</span>'; }).join('') : '<div class="rl-mood-empty">没有找到相关内容</div>';
 }
 
 // ===== 通知 =====
@@ -2132,6 +2189,7 @@ async function loadSettingsToUI() {
   document.getElementById('keepAliveToggle').classList.toggle('on', !!settingsCache.keepAlive);
   document.getElementById('notificationToggle').classList.toggle('on', !!settingsCache.notification);
   document.getElementById('keepAliveStatus').textContent = settingsCache.keepAlive ? '已开启' : '未开启';
+ initSettingsTabs(); 
 }
 
 // ===== 会话级头像昵称面板 =====
@@ -2971,29 +3029,27 @@ document.addEventListener('visibilitychange', function() {
   }
 });
 
- // ===== 设置页面自动化分栏魔法 =====
+// ===== 设置页面自动化分栏魔法 =====
 function initSettingsTabs() {
   var container = document.getElementById('settingsTabContainer');
-  if (!container || container.innerHTML !== '') return;
+  if (!container) return;
+  
+  // 如果已经生成过按钮了就不重复生成
+  if (container.querySelector('.settings-tabs')) return;
 
-  // 1. 插入顶部的 Tab 按钮
-  container.innerHTML = `
-    <div class="settings-tabs">
-      <div class="settings-tab active" data-tab="layout">布局</div>
-      <div class="settings-tab" data-tab="chat">聊天行为</div>
-      <div class="settings-tab" data-tab="music">音乐</div>
-      <div class="settings-tab" data-tab="storage">存储</div>
-    </div>
-  `;
+  container.innerHTML = '<div class="settings-tabs">' +
+    '<div class="settings-tab active" data-tab="layout">布局</div>' +
+    '<div class="settings-tab" data-tab="chat">聊天行为</div>' +
+    '<div class="settings-tab" data-tab="music">音乐</div>' +
+    '<div class="settings-tab" data-tab="storage">存储</div>' +
+  '</div>';
 
-  // 2. 找到所有的设置块，并根据标题自动分类
   var sections = document.querySelectorAll('.settings-body > .settings-section');
   sections.forEach(function(sec) {
     var titleEl = sec.querySelector('.settings-section-title');
     if (!titleEl) return;
     var title = titleEl.textContent;
 
-    // 分配分类
     if (title.includes('我方信息') || title.includes('纪念日') || title.includes('美化') || title.includes('月经') || title.includes('后台运行')) {
       sec.setAttribute('data-group', 'layout');
     } else if (title.includes('聊天行为') || title.includes('主动行为') || title.includes('拼接数量')) {
@@ -3003,11 +3059,10 @@ function initSettingsTabs() {
     } else if (title.includes('存储')) {
       sec.setAttribute('data-group', 'storage');
     } else {
-      sec.setAttribute('data-group', 'layout'); // 默认放布局
+      sec.setAttribute('data-group', 'layout');
     }
   });
 
-  // 3. 点击 Tab 切换显示
   var tabs = container.querySelectorAll('.settings-tab');
   tabs.forEach(function(tab) {
     tab.onclick = function() {
@@ -3016,23 +3071,13 @@ function initSettingsTabs() {
       var targetGroup = tab.dataset.tab;
 
       sections.forEach(function(sec) {
-        if (sec.getAttribute('data-group') === targetGroup) {
-          sec.style.display = 'block';
-        } else {
-          sec.style.display = 'none';
-        }
+        sec.style.display = (sec.getAttribute('data-group') === targetGroup) ? 'block' : 'none';
       });
     };
   });
 
-  // 4. 默认点一下第一个 Tab，让页面刷新一次状态
   if (tabs.length > 0) tabs[0].click();
 }
-
-// 拦截打开设置面板的按钮，每次打开时初始化一次分栏
-document.getElementById('btnOpenSettings').addEventListener('click', function() {
-  setTimeout(initSettingsTabs, 50);
-});
  // ===== 启动 =====
 (function bootstrap() {
   var forceTimer = setTimeout(function() {
