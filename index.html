@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>梨叙</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { background: #f5f5f5; color: #333; overflow: hidden; }
+  
+  /* 核心聊天区 */
+  .loader-wrapper { position: fixed; inset: 0; z-index: 1000; background: #f5f5f5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; transition: opacity 0.35s; }
+  .loader-wrapper.fade-out { opacity: 0; pointer-events: none; }
+  .loader-letters { display: flex; gap: 8px; font-size: 48px; font-weight: 700; }
+  .loader-letters span { animation: bounce 1.4s infinite; }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-20px);color:#666} }
+  .app { display: flex; height: 100vh; width: 100%; }
+  .sidebar { width: 280px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+  .chat-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .chat-item { padding: 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; background: #fafafa; }
+  .main { flex: 1; display: flex; flex-direction: column; background: #f5f5f5; position: relative; }
+  .home-view { flex: 1; display: flex; flex-direction: column; }
+  .home-header { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-bottom: 1px solid #eee; }
+  .home-chat-list { flex: 1; overflow-y: auto; padding: 16px; }
+  .home-chat-card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; gap: 12px; cursor: pointer; }
+  .chat-view { flex: 1; display: flex; flex-direction: column; position: relative; }
+  .chat-header { padding: 12px 16px; background: #fff; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
+  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .message { display: flex; gap: 10px; max-width: 80%; }
+  .message.user { align-self: flex-end; flex-direction: row-reverse; }
+  .avatar { width: 38px; height: 38px; border-radius: 6px; background: #ddd; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; }
+  .message.user .avatar { background: #333; }
+  
+  /* 默认气泡 */
+  .bubble { padding: 10px 14px; border-radius: 8px; line-height: 1.5; font-size: 15px; background: #fff; }
+  .message.user .bubble { background: #333; color: #fff; }
+  .bubble img { max-width: 100%; max-height: 180px; border-radius: 6px; object-fit: contain; }
+
+  .input-area { padding: 12px; background: #fff; display: flex; gap: 10px; align-items: flex-end; border-top: 1px solid #eee; }
+  .input-wrap { flex: 1; background: #f0f0f0; border-radius: 8px; padding: 8px 12px; display: flex; }
+  #msgInput { width: 100%; border: none; background: none; outline: none; resize: none; max-height: 100px; font-size: 16px; }
+  .input-icon-btn { width: 38px; height: 38px; border-radius: 50%; background: #f0f0f0; border: none; cursor: pointer; }
+  .btn-send { background: #333; color: #fff; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; height: 38px; }
+  
+  /* 面板与弹窗通用 */
+  .panel { display: none; position: fixed; inset: 0; z-index: 100; background: #fff; flex-direction: column; }
+  .panel.show { display: flex; }
+  .panel-header { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .modal-mask { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+  .modal-mask.show { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: 90%; max-width: 360px; overflow: hidden; display: flex; flex-direction: column; max-height: 80vh; }
+  .modal-header { padding: 16px; font-size: 16px; text-align: center; border-bottom: 1px solid #eee; font-weight: 500; }
+  .modal-body { padding: 20px; overflow-y: auto; font-size: 14px; color: #666; }
+  .modal-footer { display: flex; border-top: 1px solid #eee; }
+  .modal-btn { flex: 1; padding: 14px; text-align: center; cursor: pointer; }
+  .modal-btn.cancel { color: #999; border-right: 1px solid #eee; }
+  
+  /* 专属组件 */
+  .emoji-panel { display: none; background: #f5f5f5; padding: 12px; height: 200px; border-top: 1px solid #eee; flex-direction: column; }
+  .emoji-panel.show { display: flex; }
+  .emoji-grid { display: flex; flex-wrap: wrap; gap: 10px; overflow-y: auto; }
+  .emoji-item { width: 50px; height: 50px; background: #fff; border-radius: 8px; cursor: pointer; overflow: hidden; }
+  .emoji-item img { width: 100%; height: 100%; object-fit: cover; }
+  .extra-panel { display: none; padding: 20px; background: #fff; border-top: 1px solid #eee; }
+  .extra-panel.show { display: block; }
+  .extra-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; }
+  .extra-item { cursor: pointer; padding: 10px; background: #f9f9f9; border-radius: 8px; }
+  
+  /* 字卡与标签 */
+  .filter-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 12px; }
+  .filter-tab { padding: 6px 14px; border-radius: 999px; background: #f0f0f0; cursor: pointer; white-space: nowrap; }
+  .filter-tab.active { background: #333; color: #fff; }
+  .wordcard-item { padding: 10px; background: #f8f8f8; border-radius: 6px; margin-bottom: 6px; font-size: 14px; }
+  
+  /* 设置区 */
+  .settings-input-num { width: 50px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+  .custom-css-input { width: 100%; min-height: 120px; background: #1e1e1e; color: #d4d4d4; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; margin-top: 10px; }
+  
+  /* 通话 */
+  .call-mini-bubble { display: none; position: fixed; top: 70px; right: 16px; z-index: 500; background: #222; border-radius: 999px; padding: 8px 16px; color: #fff; cursor: pointer; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); touch-action: none; }
+  .call-mini-bubble.show { display: flex; }
+  .call-screen { display: none; position: fixed; inset: 0; z-index: 400; background: #222; color: #fff; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+  .call-screen.show { display: flex; }
+  
+  /* 信箱UI */
+  .letter-list-item { background: #f8f8f8; padding: 14px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; }
+  .letter-box { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .letter-meta { font-size: 12px; color: #999; margin-bottom: 8px; }
+  .letter-text { font-size: 14px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="loader-wrapper" id="loader">
+  <div class="loader-letters"><span>L</span><span>O</span><span>V</span><span>E</span></div>
+</div>
+
+<div class="app" style="visibility:hidden">
+  <aside class="sidebar">
+    <div class="home-header"><h2>梨叙</h2></div>
+    <div class="chat-list" id="chatListSidebar"></div>
+    <div style="padding:12px;border-top:1px solid #eee;">
+      <button class="btn-send" style="width:100%;margin-bottom:8px;" id="btnManageReplies">字卡库</button>
+      <button class="btn-send" style="width:100%;background:#f0f0f0;color:#333;" id="btnOpenSettings">设置</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="home-view" id="homeView">
+      <div class="home-header">
+        <span style="font-weight:600;">✧₍^˶- ˕ -˵^₎✧</span>
+        <button id="homeNewChatBtn" style="border:none;background:none;font-size:24px;">+</button>
+      </div>
+      <div class="home-chat-list" id="homeChatList"></div>
+    </div>
+
+    <div class="chat-view" id="chatView" style="display:none;">
+      <div class="chat-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="chatBackBtn" style="border:none;background:none;font-size:20px;">‹</button>
+          <span id="chatTitle">对方</span>
+        </div>
+        <button id="btnOpenMailbox" style="border:none;background:none;font-size:20px;">✉️ 信箱</button>
+      </div>
+      <div class="messages" id="messages"></div>
+      
+      <div class="emoji-panel" id="emojiPanel">
+        <div class="emoji-grid" id="emojiGrid"></div>
+      </div>
+
+      <div class="input-area" id="inputArea">
+        <div class="input-wrap"><textarea id="msgInput" rows="1" placeholder="输入消息..."></textarea></div>
+        <button class="input-icon-btn" id="btnEmoji">😀</button>
+        <button class="input-icon-btn" id="btnMore">+</button>
+        <button class="btn-send" id="btnSend">发送</button>
+      </div>
+
+      <div class="extra-panel" id="extraPanel">
+        <div class="extra-grid">
+          <div class="extra-item" data-type="transfer">💳<div style="font-size:12px;margin-top:4px;">转账</div></div>
+          <div class="extra-item" data-type="period">📅<div style="font-size:12px;margin-top:4px;">月经</div></div>
+          <div class="extra-item" data-type="call">📞<div style="font-size:12px;margin-top:4px;">语音</div></div>
+          <div class="extra-item" data-type="pat">🤍<div style="font-size:12px;margin-top:4px;">拍一拍</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="panel" id="replyPanel">
+    <div class="panel-header">
+      <div style="display:flex;gap:10px;" id="rlTabs">
+        <span class="filter-tab active" data-tab="cards">字卡</span>
+        <span class="filter-tab" data-tab="mood">状态</span>
+        <span class="filter-tab" data-tab="pat">拍一拍</span>
+      </div>
+      <button id="btnCloseReply" style="border:none;background:none;font-size:20px;">×</button>
+    </div>
+    <div class="panel-body">
+      <div id="tabPanelCards">
+        <div class="filter-tabs" id="cardsFilterTabs"></div>
+        <div style="display:flex;gap:10px;margin-bottom:12px;">
+          <textarea id="replyInput" style="flex:1;height:60px;border:1px solid #ddd;border-radius:6px;padding:8px;" placeholder="【日常】&#10;你好呀"></textarea>
+          <button class="btn-send" id="btnImportReplies" style="height:60px;">导入</button>
+        </div>
+        <div id="rlGroups"></div>
+      </div>
+      <div id="tabPanelMood" style="display:none;">
+        <textarea id="moodInput" style="width:100%;height:80px;border:1px solid #ddd;border-radius:6px;padding:8px;" placeholder="每行一句"></textarea>
+        <button class="btn-send" id="btnImportMood" style="margin-top:10px;">导入</button>
+        <div id="moodList" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+      </div>
+      <div id="tabPanelPat" style="display:none;">
+        <div style="font-size:12px;color:#999;margin-bottom:8px;">使用 {other} 代表对方，{me} 代表自己</div>
+        <textarea id="patInput" style="width:100%;height:80px;border:1px solid #ddd;border-radius:6px;padding:8px;" placeholder="摸了摸{other}的手"></textarea>
+        <button class="btn-send" id="btnImportPat" style="margin-top:10px;">导入</button>
+        <div id="patList" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="mailboxPanel">
+    <div class="panel-header">
+      <div style="display:flex;gap:10px;" id="mbTabs">
+        <span class="filter-tab active" data-mbtab="received">收到</span>
+        <span class="filter-tab" data-mbtab="sent">发出</span>
+        <span class="filter-tab" data-mbtab="write" style="background:#333;color:#fff;">写信</span>
+      </div>
+      <button id="btnCloseMailbox" style="border:none;background:none;font-size:20px;">×</button>
+    </div>
+    <div class="panel-body" id="mbBody"></div>
+    <div id="letterDetailView" style="display:none; position:absolute; inset:0; background:#fff; flex-direction:column; z-index:10;">
+      <div class="panel-header">
+        <button id="btnBackToMailbox" style="border:none;background:none;">‹ 返回</button>
+        <span>信件详情</span>
+        <div style="width:30px;"></div>
+      </div>
+      <div class="panel-body" id="letterDetailContent"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="settingsPanel">
+    <div class="panel-header"><span>设置</span><button id="btnCloseSettings" style="border:none;background:none;font-size:20px;">×</button></div>
+    <div class="panel-body">
+      <h3 style="font-size:15px;margin-bottom:10px;">聊天行为</h3>
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;">
+        <span>最快延迟</span><div><input type="number" id="delayMin" class="settings-input-num" value="1"> s</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;margin-bottom:20px;">
+        <span>最慢延迟</span><div><input type="number" id="delayMax" class="settings-input-num" value="10"> s</div>
+      </div>
+      
+      <h3 style="font-size:15px;margin-bottom:10px;">自定义气泡 CSS</h3>
+      <div style="font-size:12px;color:#999;margin-bottom:8px;">支持自定义类名格式（自动映射到气泡）</div>
+      <textarea class="custom-css-input" id="customCssInput" placeholder=".message-sent { ... }"></textarea>
+      <button class="btn-send" id="btnApplyCss" style="margin-top:10px;width:100%;">应用 CSS</button>
+    </div>
+  </div>
+
+  <div class="call-mini-bubble" id="callMiniBubble"><div id="callMiniName" style="font-size:12px;">通话中</div></div>
+  <div class="call-screen" id="callScreen">
+    <button id="callMinimizeBtn" style="position:absolute;top:20px;right:20px;background:none;border:none;color:#fff;font-size:20px;">-</button>
+    <h2 id="callName">对方</h2>
+    <div id="callTimer" style="font-size:30px;">00:00</div>
+    <button id="callHangup" style="margin-top:30px;background:#e53935;color:#fff;border:none;padding:12px 30px;border-radius:20px;">挂断</button>
+  </div>
+
+  <div class="modal-mask" id="modalMask">
+    <div class="modal">
+      <div class="modal-header" id="modalTitle">提示</div>
+      <div class="modal-body" id="modalBody">内容</div>
+      <div class="modal-footer">
+        <div class="modal-btn cancel" id="modalCancel">取消</div>
+        <div class="modal-btn" id="modalOk">确定</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var DB = { chats: [], messages: [], wordcards: [], letters: [], settings: {}, emojis: [] };
+var currentChatId = null;
+var LS_KEY = 'lixu_v7';
+var callState = { active: false, timer: null, sec: 0 };
+
+function save() { localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+function load() {
+  var s = localStorage.getItem(LS_KEY);
+  if (s) { try { var p = JSON.parse(s); for(var k in p) DB[k] = p[k]; } catch(e){} }
+}
+load();
+
+function ID() { return Date.now() + Math.floor(Math.random()*1000); }
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function init() {
+  document.querySelector('.app').style.visibility = 'visible';
+  document.getElementById('loader').classList.add('fade-out');
+  if (!DB.chats.length) { DB.chats.push({ id: ID(), name: '试验' }); save(); }
+  document.getElementById('chatListSidebar').innerHTML = DB.chats.map(c => `<div class="chat-item" onclick="enterChat(${c.id})">${esc(c.name)}</div>`).join('');
+  document.getElementById('homeChatList').innerHTML = DB.chats.map(c => `<div class="home-chat-card" onclick="enterChat(${c.id})"><div style="font-size:16px;">${esc(c.name)}</div></div>`).join('');
+  document.getElementById('delayMin').value = DB.settings.delayMin || 1;
+  document.getElementById('delayMax').value = DB.settings.delayMax || 10;
+  document.getElementById('customCssInput').value = DB.settings.customCss || '';
+  applyCustomCss(DB.settings.customCss);
+  bindEvents();
+}
+
+function enterChat(id) {
+  currentChatId = id;
+  document.getElementById('homeView').style.display = 'none';
+  document.getElementById('chatView').style.display = 'flex';
+  document.getElementById('chatTitle').textContent = DB.chats.find(c => c.id === id).name;
+  renderMessages();
+}
+
+function renderMessages() {
+  var box = document.getElementById('messages');
+  box.innerHTML = DB.messages.filter(m => m.chatId === currentChatId).map(m => {
+    var av = m.sender === 'user' ? '我' : 'TA';
+    if (m.type === 'pat') return `<div style="text-align:center;font-size:12px;color:#999;margin:10px 0;">${esc(m.text)}</div>`;
+    return `<div class="message ${m.sender}">
+      <div class="avatar">${av}</div>
+      <div class="bubble ${m.sender==='user'?'message-sent':'message-received'}">${m.type==='image'?`<img src="${m.text}">`:esc(m.text)}</div>
+    </div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+// CSS 自动映射核心逻辑
+function applyCustomCss(css) {
+  if (!css) {
+    document.getElementById('dynamicCss').innerHTML = '';
+    return;
+  }
+  // 核心：将用户写的类名翻译为系统实际应用的 DOM 结构类名
+  var mappedCss = css.replace(/\.message-sent/g, '.message.user .bubble')
+                     .replace(/\.message-received/g, '.message.other .bubble');
+  var style = document.getElementById('dynamicCss');
+  if (!style) { style = document.createElement('style'); style.id = 'dynamicCss'; document.head.appendChild(style); }
+  style.innerHTML = mappedCss;
+}
+
+function bindEvents() {
+  document.getElementById('btnManageReplies').onclick = () => document.getElementById('replyPanel').classList.add('show');
+  document.getElementById('btnOpenSettings').onclick = () => document.getElementById('settingsPanel').classList.add('show');
+  document.getElementById('btnCloseSettings').onclick = () => document.getElementById('settingsPanel').classList.remove('show');
+  document.getElementById('btnOpenMailbox').onclick = () => { document.getElementById('mailboxPanel').classList.add('show'); renderMailbox(); };
+  document.getElementById('btnCloseMailbox').onclick = () => document.getElementById('mailboxPanel').classList.remove('show');
+  document.getElementById('btnBackToMailbox').onclick = () => document.getElementById('letterDetailView').style.display = 'none';
+  
+  document.getElementById('btnEmoji').onclick = () => document.getElementById('emojiPanel').classList.toggle('show');
+  document.getElementById('btnMore').onclick = () => { document.getElementById('extraPanel').classList.toggle('show'); document.getElementById('emojiPanel').classList.remove('show'); };
+  
+  document.getElementById('btnApplyCss').onclick = () => {
+    var css = document.getElementById('customCssInput').value;
+    DB.settings.customCss = css; save(); applyCustomCss(css); alert('气泡 CSS 应用成功！');
+  };
+
+  document.querySelectorAll('.extra-item').forEach(el => {
+    el.onclick = () => {
+      var type = el.getAttribute('data-type');
+      document.getElementById('extraPanel').classList.remove('show');
+      if (type === 'pat') {
+        var list = DB.settings.patList || [];
+        if (!list.length) return alert('请去字卡库导入拍一拍');
+        var chat = DB.chats.find(c => c.id === currentChatId);
+        var text = list[Math.floor(Math.random() * list.length)].replace(/\{other\}/g, chat.name).replace(/\{me\}/g, "自己");
+        DB.messages.push({ id: ID(), chatId: currentChatId, text: "我 " + text, sender: 'user', type: 'pat', createdAt: Date.now() });
+        save(); renderMessages();
+      }
+      if (type === 'call') {
+        if (callState.active) return;
+        callState.active = true; callState.sec = 0;
+        document.getElementById('callScreen').classList.add('show');
+        callState.timer = setInterval(() => {
+          callState.sec++;
+          document.getElementById('callTimer').textContent = String(Math.floor(callState.sec/60)).padStart(2,'0') + ':' + String(callState.sec%60).padStart(2,'0');
+        }, 1000);
+      }
+    };
+  });
+
+  document.getElementById('callMinimizeBtn').onclick = () => { document.getElementById('callScreen').classList.remove('show'); document.getElementById('callMiniBubble').classList.add('show'); };
+  document.getElementById('callMiniBubble').onclick = () => { document.getElementById('callScreen').classList.add('show'); document.getElementById('callMiniBubble').classList.remove('show'); };
+  document.getElementById('callHangup').onclick = () => { clearInterval(callState.timer); callState.active = false; document.getElementById('callScreen').classList.remove('show'); document.getElementById('callMiniBubble').classList.remove('show'); };
+}
+
+window.onload = init;
+</script>
+</body>
+</html>
