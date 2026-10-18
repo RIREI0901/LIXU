@@ -482,6 +482,13 @@
     .rl-tab { font-size: 11px; padding: 5px 10px; }
   }
    .pat-message { align-self: center; text-align: center; margin: 4px 0; font-size: 12px; color: #999; padding: 4px 10px; line-height: 1.5; word-break: break-word; }
+  /* 设置页音乐列表 */
+  .settings-music-list { margin-top: 16px; border-top: 1px dashed #f0f0f0; padding-top: 12px; max-height: 300px; overflow-y: auto; }
+  .settings-music-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f8f8f8; border-radius: 8px; margin-bottom: 8px; font-size: 13px; border: 1px solid #f0f0f0; }
+  .settings-music-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px; cursor: pointer; color: #333; }
+  .settings-music-name:hover { color: #b45309; text-decoration: underline; }
+  .settings-music-del { background: none; border: none; color: #c53030; cursor: pointer; font-size: 13px; padding: 4px 8px; border-radius: 4px; }
+  .settings-music-del:hover { background: #ffe5e5; }
 </style>
 </head>
 <body>
@@ -800,7 +807,9 @@
         <div class="settings-section-title">音乐播放器</div>
         <div class="settings-row"><div><div class="settings-label">选择文件</div></div><button class="settings-btn" id="btnImportMusic">选择音乐文件</button><input type="file" id="musicInput" accept="audio/*" style="display:none"></div>
         <div class="settings-row"><div><div class="settings-label">从链接导入</div><div class="settings-desc">粘贴 mp3 直链地址</div></div><button class="settings-btn" id="btnImportMusicUrl">链接导入</button></div>
+       <div id="settingsMusicList" class="settings-music-list"></div>
       </div>
+     
 
       <div class="settings-section">
         <div class="settings-section-title">存储管理</div>
@@ -1609,17 +1618,6 @@ async function handlePatTap(mode, customText) {
     text = finalText;
   } else { return; }
   
-  await addMessage(currentChatId, text, 'user', 'pat', null, { pat: true });
-  await renderMessages(); await renderHomeList();
-}
-  if (!currentChatId) return;
-  var chat = await getChat(currentChatId);
-  var me = settingsCache.myName || '我';
-  var other = chat ? getChatName(chat) : 'TA';
-  var text;
-  if (mode === 'normal') text = me + '拍了拍' + other + '的头';
-  else if (mode === 'custom' && customText) text = customText.replace(/\{me\}/g, me).replace(/\{other\}/g, other);
-  else return;
   await addMessage(currentChatId, text, 'user', 'pat', null, { pat: true });
   await renderMessages(); await renderHomeList();
 }
@@ -2449,9 +2447,44 @@ async function openLetterDetail(threadId) {
 var audioEl = document.getElementById('audioEl');
 var musicState = { list: [], index: -1, mode: 0 }; // mode: 0顺序, 1单曲, 2随机
 
+async function renderSettingsMusicList() {
+  var listEl = document.getElementById('settingsMusicList');
+  if (!listEl) return;
+  var list = await tblAll('music');
+  if (!list.length) {
+    listEl.innerHTML = '<div style="text-align:center;color:#999;font-size:12px;padding:10px;">暂无本地音乐</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  list.forEach(function(m) {
+    var div = document.createElement('div');
+    div.className = 'settings-music-item';
+    div.innerHTML = '<span class="settings-music-name" title="点击重命名">' + escapeHtml(m.name) + '</span>' +
+                    '<button class="settings-music-del">删除</button>';
+    
+    div.querySelector('.settings-music-name').onclick = async function() {
+      var newName = prompt('修改歌曲名字：', m.name);
+      if (newName !== null && newName.trim() !== '' && newName !== m.name) {
+        m.name = newName.trim();
+        await tblPut('music', m);
+        await loadMusicData();
+      }
+    };
+    
+    div.querySelector('.settings-music-del').onclick = async function() {
+      if (!confirm('确定删除这首歌吗？')) return;
+      await tblDelete('music', m.id);
+      await loadMusicData();
+    };
+    
+    listEl.appendChild(div);
+  });
+}
+ 
 async function loadMusicData() {
   musicState.list = await tblAll('music');
   renderMusicList();
+  renderSettingsMusicList();
 }
 
 function renderMusicList() {
@@ -2654,6 +2687,7 @@ async function loadSettingsToUI() {
   document.getElementById('notificationToggle').classList.toggle('on', !!settingsCache.notification);
   document.getElementById('keepAliveStatus').textContent = settingsCache.keepAlive ? '已开启' : '未开启';
  initSettingsTabs(); 
+   renderSettingsMusicList();
 }
 
 // ===== 会话级头像昵称面板 =====
