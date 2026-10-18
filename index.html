@@ -3,130 +3,246 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23ffffff'/%3E%3Cg fill='none' stroke='%23404040' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M256 90 A166 166 0 1 0 256 422 A166 166 0 0 0 300 415 L318 470 L360 415 A166 166 0 0 0 256 90 Z'/%3E%3C/g%3E%3Ctext x='256' y='445' font-family='-apple-system,Helvetica,Arial,sans-serif' font-size='64' font-weight='300' letter-spacing='8' text-anchor='middle' fill='%23404040'%3ELIXU%3C/text%3E%3C/svg%3E">
 <title>梨叙</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
   body { background: #f5f5f5; color: #333; overflow: hidden; }
-  
-  /* 核心聊天区 */
-  .loader-wrapper { position: fixed; inset: 0; z-index: 1000; background: #f5f5f5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; transition: opacity 0.35s; }
+  :root { --msg-font-size: 15px; }
+
+  .loader-wrapper { position: fixed; inset: 0; z-index: 100; background: #f5f5f5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; transition: opacity 0.35s ease; }
   .loader-wrapper.fade-out { opacity: 0; pointer-events: none; }
-  .loader-letters { display: flex; gap: 8px; font-size: 48px; font-weight: 700; }
-  .loader-letters span { animation: bounce 1.4s infinite; }
-  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-20px);color:#666} }
-  .app { display: flex; height: 100vh; width: 100%; }
-  .sidebar { width: 280px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+  .loader-letters { display: flex; gap: 8px; font-size: 48px; font-weight: 700; color: #333; }
+  .loader-letters span { display: inline-block; animation: bounce 1.4s ease-in-out infinite; }
+  .loader-letters span:nth-child(1) { animation-delay: 0s; }
+  .loader-letters span:nth-child(2) { animation-delay: 0.15s; }
+  .loader-letters span:nth-child(3) { animation-delay: 0.3s; }
+  .loader-letters span:nth-child(4) { animation-delay: 0.45s; }
+  @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); color: #666; } }
+  .loader-text { font-size: 13px; color: #999; letter-spacing: 2px; max-width: 80%; text-align: center; line-height: 1.6; }
+  .app { display: flex; height: 100vh; height: 100dvh; width: 100%; }
+
+  /* 侧边栏 */
+  .sidebar { width: 280px; min-width: 240px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+  .sidebar-header { padding: 18px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; }
+  .sidebar-header h1 { font-size: 16px; font-weight: 600; color: #333; }
+  .wallet-card { margin: 12px 12px 4px; background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%); border: 1px solid #e8e8e8; border-radius: 10px; padding: 12px 14px; }
+  .wallet-card.no-chat { display: none; }
+  .wallet-title { font-size: 11px; color: #999; margin-bottom: 6px; }
+  .wallet-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .wallet-row + .wallet-row { border-top: 1px dashed #e0e0e0; margin-top: 4px; padding-top: 8px; }
+  .wallet-label { color: #666; font-size: 12px; }
+  .wallet-balance { color: #333; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; }
+  .wallet-balance.mine { color: #b45309; }
   .chat-list { flex: 1; overflow-y: auto; padding: 8px; }
-  .chat-item { padding: 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; background: #fafafa; }
-  .main { flex: 1; display: flex; flex-direction: column; background: #f5f5f5; position: relative; }
-  .home-view { flex: 1; display: flex; flex-direction: column; }
-  .home-header { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-bottom: 1px solid #eee; }
-  .home-chat-list { flex: 1; overflow-y: auto; padding: 16px; }
-  .home-chat-card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; gap: 12px; cursor: pointer; }
-  .chat-view { flex: 1; display: flex; flex-direction: column; position: relative; }
-  .chat-header { padding: 12px 16px; background: #fff; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
-  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-  .message { display: flex; gap: 10px; max-width: 80%; }
+  .chat-item { padding: 12px 14px; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; margin-bottom: 2px; }
+  .chat-item:hover { background: #f0f0f0; }
+  .chat-item.active { background: #e0e0e0; }
+  .chat-item-title { font-size: 14px; font-weight: 500; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-item-preview { font-size: 12px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-item-time { font-size: 11px; color: #bbb; margin-left: auto; }
+  .sidebar-footer { padding: 12px 16px; border-top: 1px solid #f0f0f0; font-size: 11px; color: #bbb; line-height: 1.5; }
+  .btn-manage-replies { width: 100%; margin-top: 10px; padding: 9px; background: #f0f0f0; color: #666; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .store-status { margin-top: 10px; padding: 6px 8px; background: #f8f8f8; border-radius: 4px; font-size: 10px; color: #999; line-height: 1.5; word-break: break-all; }
+
+  /* 面板通用 */
+  .reply-library-panel, .settings-panel, .period-panel, .anniversary-panel, .chat-profile-panel, .mailbox-panel { display: none; position: fixed; inset: 0; z-index: 40; background: #fff; flex-direction: column; }
+  .reply-library-panel.show, .settings-panel.show, .period-panel.show, .anniversary-panel.show, .chat-profile-panel.show, .mailbox-panel.show { display: flex; }
+  .rl-header, .settings-header, .period-header, .ann-header, .cp-header, .mb-header { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; background: #fff; position: sticky; top: 0; z-index: 1; flex-wrap: wrap; gap: 8px; }
+  .rl-title, .settings-title, .period-title, .ann-title, .cp-title, .mb-title { font-size: 16px; font-weight: 500; color: #333; }
+  .rl-close-btn, .settings-close-btn, .period-close-btn, .ann-close-btn, .cp-close-btn, .mb-close-btn { background: none; border: none; color: #666; font-size: 22px; cursor: pointer; padding: 4px 10px; line-height: 1; }
+  .rl-body, .settings-body, .period-body, .ann-body, .cp-body, .mb-body { flex: 1; overflow-y: auto; padding: 20px; -webkit-overflow-scrolling: touch; }
+
+  .rl-tabs, .mb-tabs { display: flex; gap: 6px; margin-left: auto; margin-right: 12px; flex-wrap: wrap; }
+  .rl-tab, .mb-tab { padding: 6px 14px; border-radius: 999px; font-size: 12px; cursor: pointer; background: #f0f0f0; color: #666; user-select: none; white-space: nowrap; }
+  .rl-tab.active, .mb-tab.active { background: #333; color: #fff; font-weight: 500; }
+  .settings-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+  .settings-tabs::-webkit-scrollbar { display: none; }
+  .settings-tab { padding: 6px 16px; border-radius: 999px; font-size: 14px; background: #f0f0f0; color: #666; cursor: pointer; user-select: none; }
+  .settings-tab.active { background: #333; color: #fff; font-weight: 500; }
+  .settings-group { display: none; }
+  .settings-group.show { display: block; }
+
+  .rl-tip { font-size: 12px; color: #999; margin-bottom: 12px; line-height: 1.6; background: #f0f0f0; padding: 10px 12px; border-radius: 6px; }
+  .rl-input { width: 100%; height: 200px; background: #f0f0f0; color: #333; border: 1px solid #d0d0d0; border-radius: 6px; padding: 12px; font-size: 14px; font-family: inherit; resize: vertical; line-height: 1.6; }
+  .rl-input-sm { height: 120px; }
+  .rl-input:focus { outline: none; border-color: #333; }
+  .rl-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .rl-btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; }
+  .rl-btn-primary { background: #333; color: #fff; }
+  .rl-btn-secondary { background: #d0d0d0; color: #333; }
+  .rl-result { margin-top: 16px; padding: 12px; background: #f0f0f0; border-radius: 6px; font-size: 13px; color: #666; display: none; line-height: 1.6; }
+  .rl-result.show { display: block; }
+  .rl-groups { margin-top: 20px; }
+  .rl-group-item { background: #f0f0f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; }
+  .rl-group-name { font-size: 14px; font-weight: 500; color: #333; margin-bottom: 6px; }
+  .rl-group-count { font-size: 12px; color: #999; float: right; font-weight: normal; }
+  .rl-group-list { font-size: 13px; color: #666; line-height: 1.8; }
+  .rl-empty { text-align: center; color: #999; padding: 40px 0; font-size: 14px; }
+  .rl-mood-list { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .rl-mood-item { padding: 5px 12px; border-radius: 999px; background: #fff7e6; color: #b45309; border: 1px solid #f0d98b; font-size: 12px; }
+  .rl-mood-empty { width: 100%; text-align: center; color: #999; padding: 12px 0; font-size: 12px; }
+
+  /* 分类过滤 Tabs */
+  .manage-filter-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+  .manage-filter-tabs::-webkit-scrollbar { display: none; }
+  .manage-filter-tab { padding: 6px 14px; border-radius: 999px; font-size: 13px; background: #f0f0f0; color: #666; cursor: pointer; user-select: none; }
+  .manage-filter-tab.active { background: #333; color: #fff; font-weight: 500; }
+  .manage-search-wrap { padding: 10px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; }
+  .manage-search-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: #f8f8f8; font-size: 14px; outline: none; }
+
+  .manage-bar { display: none; padding: 10px 16px; background: #fff7e6; border-bottom: 1px solid #f0d98b; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .manage-bar.show { display: flex; }
+  .manage-bar-btn { padding: 6px 12px; border-radius: 6px; border: none; font-size: 13px; cursor: pointer; }
+  .manage-bar-btn.primary { background: #333; color: #fff; }
+  .manage-bar-btn.danger { background: #c53030; color: #fff; }
+  .manage-bar-btn.secondary { background: #fff; color: #666; border: 1px solid #ddd; }
+  .manage-bar-count { font-size: 13px; color: #333; font-weight: 500; }
+
+  .manage-list { margin-top: 12px; }
+  .manage-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f8f8f8; border-radius: 8px; margin-bottom: 6px; cursor: pointer; }
+  .manage-item.selected { background: #fff7e6; border: 1px solid #f0d98b; }
+  .manage-checkbox { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .manage-item.selected .manage-checkbox { background: #333; border-color: #333; }
+  .manage-item.selected .manage-checkbox::after { content: '✓'; color: #fff; font-size: 12px; }
+  .manage-item-text { flex: 1; font-size: 14px; color: #333; word-break: break-all; }
+  .manage-item-group { font-size: 11px; color: #999; margin-left: 6px; }
+
+  /* 聊天 */
+  .main { flex: 1; display: flex; flex-direction: column; background: #f5f5f5; min-width: 0; position: relative; }
+  .home-view { flex: 1; display: flex; flex-direction: column; background: #f5f5f5; }
+  .home-header { padding: 14px 16px 8px; background: #f5f5f5; display: flex; align-items: center; justify-content: space-between; }
+  .home-title { font-size: 18px; font-weight: 600; color: #333; letter-spacing: 1px; text-align: center; flex: 1; }
+  .home-chat-list { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
+  .home-chat-card { background: #fff; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .home-chat-card:hover { background: #fafafa; }
+  .home-chat-avatar { width: 48px; height: 48px; border-radius: 8px; overflow: hidden; background: #d0d0d0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 600; flex-shrink: 0; }
+  .home-chat-info { flex: 1; min-width: 0; }
+  .home-chat-name { font-size: 15px; font-weight: 500; color: #333; }
+  
+  .chat-view { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
+  .chat-header { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; background: #fff; display: flex; align-items: center; justify-content: space-between; }
+  .chat-title-wrap { display: flex; flex-direction: column; min-width: 0; }
+  .chat-title { font-size: 16px; font-weight: 500; color: #333; }
+  .header-icon-btn { background: none; border: none; color: #666; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+  .messages { flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; background-color: #f5f5f5; }
+  .message { display: flex; gap: 10px; max-width: 70%; align-items: flex-start; }
   .message.user { align-self: flex-end; flex-direction: row-reverse; }
-  .avatar { width: 38px; height: 38px; border-radius: 6px; background: #ddd; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; }
+  .avatar { width: 38px; height: 38px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; overflow: hidden; background: #d0d0d0; color: #fff;}
   .message.user .avatar { background: #333; }
   
-  /* 默认气泡 */
-  .bubble { padding: 10px 14px; border-radius: 8px; line-height: 1.5; font-size: 15px; background: #fff; }
+  .bubble { padding: 10px 14px; border-radius: 6px; font-size: var(--msg-font-size, 15px); line-height: 1.5; word-break: break-word; position: relative; }
+  .message.other .bubble { background: #fff; color: #333; }
   .message.user .bubble { background: #333; color: #fff; }
-  .bubble img { max-width: 100%; max-height: 180px; border-radius: 6px; object-fit: contain; }
-
-  .input-area { padding: 12px; background: #fff; display: flex; gap: 10px; align-items: flex-end; border-top: 1px solid #eee; }
-  .input-wrap { flex: 1; background: #f0f0f0; border-radius: 8px; padding: 8px 12px; display: flex; }
-  #msgInput { width: 100%; border: none; background: none; outline: none; resize: none; max-height: 100px; font-size: 16px; }
-  .input-icon-btn { width: 38px; height: 38px; border-radius: 50%; background: #f0f0f0; border: none; cursor: pointer; }
-  .btn-send { background: #333; color: #fff; border: none; padding: 0 16px; border-radius: 6px; cursor: pointer; height: 38px; }
   
-  /* 面板与弹窗通用 */
-  .panel { display: none; position: fixed; inset: 0; z-index: 100; background: #fff; flex-direction: column; }
-  .panel.show { display: flex; }
-  .panel-header { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
-  .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
-  .modal-mask { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+  /* 关键点：限制发送图片大小 */
+  .bubble img { max-width: 100%; max-height: 200px; border-radius: 6px; object-fit: contain; display: block; }
+
+  .input-area { padding: 12px 16px 16px; border-top: 1px solid #f0f0f0; background: #fff; display: flex; gap: 10px; align-items: flex-end; }
+  .input-icon-btn { width: 38px; height: 38px; border-radius: 50%; border: none; background: #f0f0f0; color: #666; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .input-wrap { flex: 1; background: #f0f0f0; border-radius: 6px; padding: 9px 12px; display: flex; }
+  #msgInput { flex: 1; background: none; border: none; outline: none; color: #333; font-size: 16px; font-family: inherit; resize: none; max-height: 100px; line-height: 1.5; }
+  .btn-send { background: #333; color: #fff; border: none; border-radius: 6px; padding: 9px 16px; font-size: 14px; font-weight: 500; cursor: pointer; flex-shrink: 0; }
+
+  .extra-panel { display: none; padding: 20px 24px 24px; background: #fff; border-top: 1px solid #f0f0f0; }
+  .extra-panel.show { display: block; }
+  .extra-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 480px; margin: 0 auto; }
+  .extra-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; padding: 12px 0; border-radius: 10px; }
+  .extra-item:hover { background: #f8f8f8; }
+  .extra-icon { width: 56px; height: 56px; border-radius: 14px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #333; }
+  .extra-label { font-size: 12px; color: #666; }
+
+  /* 表情包面板 */
+  .emoji-panel { display: none; flex-direction: column; background: #f5f5f5; border-top: 1px solid #f0f0f0; padding: 12px 16px; height: 220px; }
+  .emoji-panel.show { display: flex; }
+  .emoji-tabs { display: flex; gap: 16px; margin-bottom: 12px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; }
+  .emoji-tab { font-size: 13px; color: #666; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+  .emoji-tab.active { color: #333; font-weight: 600; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .emoji-grid { display: flex; flex-wrap: wrap; gap: 10px; overflow-y: auto; align-content: flex-start; }
+  .emoji-item { width: 50px; height: 50px; border-radius: 8px; background: #fff; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .emoji-item img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* 悬浮通话小窗 */
+  .call-mini-bubble { display: none; position: fixed; top: 70px; right: 16px; z-index: 250; background: #1a1a1a; border-radius: 999px; padding: 6px 14px 6px 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.35); align-items: center; gap: 8px; cursor: pointer; color: #fff; user-select: none; touch-action: none; }
+  .call-mini-bubble.show { display: flex; }
+  .call-screen { display: none; position: fixed; inset: 0; z-index: 200; background: linear-gradient(180deg, #1a1a1a 0%, #2a2a2a 100%); color: #fff; flex-direction: column; align-items: center; justify-content: space-between; padding: 60px 24px 48px; }
+  .call-screen.show { display: flex; }
+
+  /* 弹窗 */
+  .modal-mask { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 500; align-items: center; justify-content: center; }
   .modal-mask.show { display: flex; }
   .modal { background: #fff; border-radius: 12px; width: 90%; max-width: 360px; overflow: hidden; display: flex; flex-direction: column; max-height: 80vh; }
-  .modal-header { padding: 16px; font-size: 16px; text-align: center; border-bottom: 1px solid #eee; font-weight: 500; }
-  .modal-body { padding: 20px; overflow-y: auto; font-size: 14px; color: #666; }
-  .modal-footer { display: flex; border-top: 1px solid #eee; }
-  .modal-btn { flex: 1; padding: 14px; text-align: center; cursor: pointer; }
-  .modal-btn.cancel { color: #999; border-right: 1px solid #eee; }
-  
-  /* 专属组件 */
-  .emoji-panel { display: none; background: #f5f5f5; padding: 12px; height: 200px; border-top: 1px solid #eee; flex-direction: column; }
-  .emoji-panel.show { display: flex; }
-  .emoji-grid { display: flex; flex-wrap: wrap; gap: 10px; overflow-y: auto; }
-  .emoji-item { width: 50px; height: 50px; background: #fff; border-radius: 8px; cursor: pointer; overflow: hidden; }
-  .emoji-item img { width: 100%; height: 100%; object-fit: cover; }
-  .extra-panel { display: none; padding: 20px; background: #fff; border-top: 1px solid #eee; }
-  .extra-panel.show { display: block; }
-  .extra-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; }
-  .extra-item { cursor: pointer; padding: 10px; background: #f9f9f9; border-radius: 8px; }
-  
-  /* 字卡与标签 */
-  .filter-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 12px; }
-  .filter-tab { padding: 6px 14px; border-radius: 999px; background: #f0f0f0; cursor: pointer; white-space: nowrap; }
-  .filter-tab.active { background: #333; color: #fff; }
-  .wordcard-item { padding: 10px; background: #f8f8f8; border-radius: 6px; margin-bottom: 6px; font-size: 14px; }
-  
-  /* 设置区 */
-  .settings-input-num { width: 50px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
-  .custom-css-input { width: 100%; min-height: 120px; background: #1e1e1e; color: #d4d4d4; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; margin-top: 10px; }
-  
-  /* 通话 */
-  .call-mini-bubble { display: none; position: fixed; top: 70px; right: 16px; z-index: 500; background: #222; border-radius: 999px; padding: 8px 16px; color: #fff; cursor: pointer; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); touch-action: none; }
-  .call-mini-bubble.show { display: flex; }
-  .call-screen { display: none; position: fixed; inset: 0; z-index: 400; background: #222; color: #fff; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
-  .call-screen.show { display: flex; }
-  
-  /* 信箱UI */
+  .modal-header { padding: 16px 20px; font-size: 16px; font-weight: 500; color: #333; text-align: center; border-bottom: 1px solid #f0f0f0; }
+  .modal-body { padding: 20px; color: #666; font-size: 14px; line-height: 1.6; overflow-y: auto; }
+  .modal-footer { display: flex; border-top: 1px solid #f0f0f0; }
+  .modal-btn { flex: 1; padding: 12px; text-align: center; cursor: pointer; font-size: 15px; color: #333; }
+  .modal-btn + .modal-btn { border-left: 1px solid #f0f0f0; }
+  .modal-btn.cancel { color: #666; }
+  .modal-input { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px; background: #f0f0f0; color: #333; font-size: 15px; font-family: inherit; outline: none;}
+
+  /* 设置输入框 */
+  .settings-input-num { width: 60px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 14px; }
+  .custom-css-input { width: 100%; min-height: 140px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #3a3a3a; border-radius: 6px; padding: 12px; font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; line-height: 1.6; resize: vertical; white-space: pre; overflow: auto; }
+
+  /* 信件 */
   .letter-list-item { background: #f8f8f8; padding: 14px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; }
   .letter-box { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .letter-box.reply { background: #f0f7ff; border-color: #d0e3ff; }
   .letter-meta { font-size: 12px; color: #999; margin-bottom: 8px; }
   .letter-text { font-size: 14px; line-height: 1.6; }
+
+  @media (max-width: 768px) {
+    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 20; transform: translateX(-100%); width: 82vw; max-width: 320px; }
+    .sidebar.open { transform: translateX(0); }
+    .message { max-width: 85%; }
+  }
 </style>
 </head>
 <body>
 
 <div class="loader-wrapper" id="loader">
   <div class="loader-letters"><span>L</span><span>O</span><span>V</span><span>E</span></div>
+  <div class="loader-text" id="loaderText">正在加载</div>
 </div>
 
 <div class="app" style="visibility:hidden">
-  <aside class="sidebar">
-    <div class="home-header"><h2>梨叙</h2></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header"><h1>梨叙</h1></div>
     <div class="chat-list" id="chatListSidebar"></div>
-    <div style="padding:12px;border-top:1px solid #eee;">
-      <button class="btn-send" style="width:100%;margin-bottom:8px;" id="btnManageReplies">字卡库</button>
-      <button class="btn-send" style="width:100%;background:#f0f0f0;color:#333;" id="btnOpenSettings">设置</button>
+    <div class="sidebar-footer">
+      <button class="btn-manage-replies" id="btnManageReplies">字卡库</button>
+      <button class="btn-manage-replies" id="btnOpenSettings">⚙️ 设置</button>
     </div>
   </aside>
 
   <main class="main">
     <div class="home-view" id="homeView">
       <div class="home-header">
-        <span style="font-weight:600;">✧₍^˶- ˕ -˵^₎✧</span>
-        <button id="homeNewChatBtn" style="border:none;background:none;font-size:24px;">+</button>
+        <button class="header-icon-btn"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <span class="home-title">✧₍^˶- ˕ -˵^₎✧</span>
+        <button class="header-icon-btn" id="homeNewChatBtn"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       </div>
       <div class="home-chat-list" id="homeChatList"></div>
     </div>
 
     <div class="chat-view" id="chatView" style="display:none;">
       <div class="chat-header">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button id="chatBackBtn" style="border:none;background:none;font-size:20px;">‹</button>
-          <span id="chatTitle">对方</span>
+        <div class="chat-header-left" style="display:flex;align-items:center;gap:8px;">
+          <button class="header-icon-btn" id="chatBackBtn"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <div class="chat-title-wrap"><span class="chat-title" id="chatTitle">对方</span></div>
         </div>
-        <button id="btnOpenMailbox" style="border:none;background:none;font-size:20px;">✉️ 信箱</button>
+        <div style="display:flex;gap:8px;">
+          <button class="header-icon-btn" id="btnOpenMailbox">✉️</button>
+        </div>
       </div>
       <div class="messages" id="messages"></div>
       
       <div class="emoji-panel" id="emojiPanel">
+        <div class="emoji-tabs">
+          <div class="emoji-tab active" data-owner="me">我方表情包</div>
+          <div class="emoji-tab" data-owner="other">对方表情包</div>
+        </div>
         <div class="emoji-grid" id="emojiGrid"></div>
       </div>
 
@@ -139,70 +255,78 @@
 
       <div class="extra-panel" id="extraPanel">
         <div class="extra-grid">
-          <div class="extra-item" data-type="transfer">💳<div style="font-size:12px;margin-top:4px;">转账</div></div>
-          <div class="extra-item" data-type="period">📅<div style="font-size:12px;margin-top:4px;">月经</div></div>
-          <div class="extra-item" data-type="call">📞<div style="font-size:12px;margin-top:4px;">语音</div></div>
-          <div class="extra-item" data-type="pat">🤍<div style="font-size:12px;margin-top:4px;">拍一拍</div></div>
+          <div class="extra-item" data-type="transfer"><div class="extra-icon">💳</div><span class="extra-label">转账</span></div>
+          <div class="extra-item" data-type="period"><div class="extra-icon">📅</div><span class="extra-label">月经</span></div>
+          <div class="extra-item" data-type="call"><div class="extra-icon">📞</div><span class="extra-label">语音通话</span></div>
+          <div class="extra-item" data-type="pat"><div class="extra-icon">🤍</div><span class="extra-label">拍一拍</span></div>
         </div>
       </div>
     </div>
   </main>
 
-  <div class="panel" id="replyPanel">
-    <div class="panel-header">
-      <div style="display:flex;gap:10px;" id="rlTabs">
-        <span class="filter-tab active" data-tab="cards">字卡</span>
-        <span class="filter-tab" data-tab="mood">状态</span>
-        <span class="filter-tab" data-tab="pat">拍一拍</span>
+  <!-- 字卡库 -->
+  <div class="reply-library-panel" id="replyPanel">
+    <div class="rl-header">
+      <span class="rl-title">字卡库</span>
+      <div class="rl-tabs">
+        <span class="rl-tab active" data-tab="cards">字卡</span>
+        <span class="rl-tab" data-tab="mood">状态</span>
+        <span class="rl-tab" data-tab="pat">拍一拍</span>
       </div>
-      <button id="btnCloseReply" style="border:none;background:none;font-size:20px;">×</button>
+      <button class="rl-close-btn" id="btnCloseReply">×</button>
     </div>
-    <div class="panel-body">
+    <div class="rl-body">
       <div id="tabPanelCards">
-        <div class="filter-tabs" id="cardsFilterTabs"></div>
-        <div style="display:flex;gap:10px;margin-bottom:12px;">
-          <textarea id="replyInput" style="flex:1;height:60px;border:1px solid #ddd;border-radius:6px;padding:8px;" placeholder="【日常】&#10;你好呀"></textarea>
-          <button class="btn-send" id="btnImportReplies" style="height:60px;">导入</button>
+        <div class="manage-filter-tabs" id="cardsFilterTabs"></div>
+        <div class="manage-search-wrap"><input type="text" class="manage-search-input" id="cardsSearchInput" placeholder="搜索字卡..."></div>
+        <div class="rl-actions">
+          <button class="rl-btn rl-btn-primary" id="btnShowImportMode">导入</button>
         </div>
-        <div id="rlGroups"></div>
+        <div id="cardsImportMode" style="display:none; margin-top:16px;">
+          <textarea class="rl-input" id="replyInput" placeholder="【日常】&#10;你好呀"></textarea>
+          <div class="rl-actions"><button class="rl-btn rl-btn-primary" id="btnImportReplies">确认导入</button></div>
+        </div>
+        <div id="rlGroups" style="margin-top:16px;"></div>
       </div>
       <div id="tabPanelMood" style="display:none;">
-        <textarea id="moodInput" style="width:100%;height:80px;border:1px solid #ddd;border-radius:6px;padding:8px;" placeholder="每行一句"></textarea>
-        <button class="btn-send" id="btnImportMood" style="margin-top:10px;">导入</button>
-        <div id="moodList" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+        <textarea id="moodInput" class="rl-input-sm rl-input" placeholder="每行一句"></textarea>
+        <div class="rl-actions"><button class="rl-btn rl-btn-primary" id="btnImportMood">导入</button></div>
+        <div class="rl-mood-list" id="moodList"></div>
       </div>
       <div id="tabPanelPat" style="display:none;">
-        <div style="font-size:12px;color:#999;margin-bottom:8px;">使用 {other} 代表对方，{me} 代表自己</div>
-        <textarea id="patInput" style="width:100%;height:80px;border:1px solid #ddd;border-radius:6px;padding:8px;" placeholder="摸了摸{other}的手"></textarea>
-        <button class="btn-send" id="btnImportPat" style="margin-top:10px;">导入</button>
-        <div id="patList" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+        <div class="rl-tip">使用 {other} 代表对方，{me} 代表自己</div>
+        <textarea id="patInput" class="rl-input-sm rl-input" placeholder="摸了摸{other}的手"></textarea>
+        <div class="rl-actions"><button class="rl-btn rl-btn-primary" id="btnImportPat">导入</button></div>
+        <div class="rl-mood-list" id="patList"></div>
       </div>
     </div>
   </div>
 
-  <div class="panel" id="mailboxPanel">
-    <div class="panel-header">
-      <div style="display:flex;gap:10px;" id="mbTabs">
-        <span class="filter-tab active" data-mbtab="received">收到</span>
-        <span class="filter-tab" data-mbtab="sent">发出</span>
-        <span class="filter-tab" data-mbtab="write" style="background:#333;color:#fff;">写信</span>
+  <!-- 信箱 -->
+  <div class="mailbox-panel" id="mailboxPanel">
+    <div class="mb-header">
+      <div class="mb-tabs">
+        <span class="mb-tab active" data-mbtab="received">收到</span>
+        <span class="mb-tab" data-mbtab="sent">发出</span>
+        <span class="mb-tab" data-mbtab="write" style="background:#333;color:#fff;">写新信</span>
       </div>
-      <button id="btnCloseMailbox" style="border:none;background:none;font-size:20px;">×</button>
+      <button class="mb-close-btn" id="btnCloseMailbox">×</button>
     </div>
-    <div class="panel-body" id="mbBody"></div>
+    <div class="mb-body" id="mbBody"></div>
     <div id="letterDetailView" style="display:none; position:absolute; inset:0; background:#fff; flex-direction:column; z-index:10;">
-      <div class="panel-header">
+      <div class="mb-header">
         <button id="btnBackToMailbox" style="border:none;background:none;">‹ 返回</button>
-        <span>信件详情</span>
+        <span class="mb-title">信件详情</span>
         <div style="width:30px;"></div>
       </div>
-      <div class="panel-body" id="letterDetailContent"></div>
+      <div class="mb-body" id="letterDetailContent"></div>
     </div>
   </div>
 
-  <div class="panel" id="settingsPanel">
-    <div class="panel-header"><span>设置</span><button id="btnCloseSettings" style="border:none;background:none;font-size:20px;">×</button></div>
-    <div class="panel-body">
+  <!-- 设置 -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-header"><span class="settings-title">设置</span><button class="settings-close-btn" id="btnCloseSettings">×</button></div>
+    <div class="settings-body">
       <h3 style="font-size:15px;margin-bottom:10px;">聊天行为</h3>
       <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;">
         <span>最快延迟</span><div><input type="number" id="delayMin" class="settings-input-num" value="1"> s</div>
@@ -212,9 +336,8 @@
       </div>
       
       <h3 style="font-size:15px;margin-bottom:10px;">自定义气泡 CSS</h3>
-      <div style="font-size:12px;color:#999;margin-bottom:8px;">支持自定义类名格式（自动映射到气泡）</div>
       <textarea class="custom-css-input" id="customCssInput" placeholder=".message-sent { ... }"></textarea>
-      <button class="btn-send" id="btnApplyCss" style="margin-top:10px;width:100%;">应用 CSS</button>
+      <button class="rl-btn rl-btn-primary" id="btnApplyCss" style="margin-top:10px;width:100%;">应用 CSS</button>
     </div>
   </div>
 
@@ -241,7 +364,7 @@
 <script>
 var DB = { chats: [], messages: [], wordcards: [], letters: [], settings: {}, emojis: [] };
 var currentChatId = null;
-var LS_KEY = 'lixu_v7';
+var LS_KEY = 'lixu_v8';
 var callState = { active: false, timer: null, sec: 0 };
 
 function save() { localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
@@ -258,8 +381,8 @@ function init() {
   document.querySelector('.app').style.visibility = 'visible';
   document.getElementById('loader').classList.add('fade-out');
   if (!DB.chats.length) { DB.chats.push({ id: ID(), name: '试验' }); save(); }
-  document.getElementById('chatListSidebar').innerHTML = DB.chats.map(c => `<div class="chat-item" onclick="enterChat(${c.id})">${esc(c.name)}</div>`).join('');
-  document.getElementById('homeChatList').innerHTML = DB.chats.map(c => `<div class="home-chat-card" onclick="enterChat(${c.id})"><div style="font-size:16px;">${esc(c.name)}</div></div>`).join('');
+  document.getElementById('chatListSidebar').innerHTML = DB.chats.map(c => `<div class="chat-item" onclick="enterChat(${c.id})"><div class="chat-item-title">${esc(c.name)}</div></div>`).join('');
+  document.getElementById('homeChatList').innerHTML = DB.chats.map(c => `<div class="home-chat-card" onclick="enterChat(${c.id})"><div class="home-chat-info"><div class="home-chat-name">${esc(c.name)}</div></div></div>`).join('');
   document.getElementById('delayMin').value = DB.settings.delayMin || 1;
   document.getElementById('delayMax').value = DB.settings.delayMax || 10;
   document.getElementById('customCssInput').value = DB.settings.customCss || '';
@@ -294,7 +417,6 @@ function applyCustomCss(css) {
     document.getElementById('dynamicCss').innerHTML = '';
     return;
   }
-  // 核心：将用户写的类名翻译为系统实际应用的 DOM 结构类名
   var mappedCss = css.replace(/\.message-sent/g, '.message.user .bubble')
                      .replace(/\.message-received/g, '.message.other .bubble');
   var style = document.getElementById('dynamicCss');
@@ -306,9 +428,13 @@ function bindEvents() {
   document.getElementById('btnManageReplies').onclick = () => document.getElementById('replyPanel').classList.add('show');
   document.getElementById('btnOpenSettings').onclick = () => document.getElementById('settingsPanel').classList.add('show');
   document.getElementById('btnCloseSettings').onclick = () => document.getElementById('settingsPanel').classList.remove('show');
+  document.getElementById('btnCloseReply').onclick = () => document.getElementById('replyPanel').classList.remove('show');
+  
   document.getElementById('btnOpenMailbox').onclick = () => { document.getElementById('mailboxPanel').classList.add('show'); renderMailbox(); };
   document.getElementById('btnCloseMailbox').onclick = () => document.getElementById('mailboxPanel').classList.remove('show');
-  document.getElementById('btnBackToMailbox').onclick = () => document.getElementById('letterDetailView').style.display = 'none';
+  document.getElementById('btnBackToMailbox').onclick = () => { document.getElementById('letterDetailView').style.display = 'none'; renderMailbox(); };
+
+  document.getElementById('chatBackBtn').onclick = () => { document.getElementById('chatView').style.display = 'none'; document.getElementById('homeView').style.display = 'flex'; };
   
   document.getElementById('btnEmoji').onclick = () => document.getElementById('emojiPanel').classList.toggle('show');
   document.getElementById('btnMore').onclick = () => { document.getElementById('extraPanel').classList.toggle('show'); document.getElementById('emojiPanel').classList.remove('show'); };
@@ -316,6 +442,34 @@ function bindEvents() {
   document.getElementById('btnApplyCss').onclick = () => {
     var css = document.getElementById('customCssInput').value;
     DB.settings.customCss = css; save(); applyCustomCss(css); alert('气泡 CSS 应用成功！');
+  };
+
+  document.getElementById('btnShowImportMode').onclick = () => {
+    document.getElementById('cardsImportMode').style.display = 'block';
+    document.getElementById('btnShowImportMode').style.display = 'none';
+  };
+
+  document.getElementById('btnImportReplies').onclick = () => {
+    var txt = document.getElementById('replyInput').value;
+    if(!txt) return;
+    var lines = txt.split('\n'); var currG = '默认';
+    lines.forEach(l => {
+      l = l.trim(); if(!l) return;
+      var m = l.match(/^【(.+)】$/);
+      if(m) currG = m[1];
+      else DB.wordcards.push({ id: ID(), group: currG, text: l });
+    });
+    save(); renderWordcards(); document.getElementById('replyInput').value = '';
+    document.getElementById('cardsImportMode').style.display = 'none';
+    document.getElementById('btnShowImportMode').style.display = 'block';
+  };
+
+  document.getElementById('btnImportPat').onclick = () => {
+    var txt = document.getElementById('patInput').value;
+    if(!txt) return;
+    DB.settings.patList = (DB.settings.patList || []).concat(txt.split('\n').filter(x=>x.trim()));
+    save(); alert('导入成功'); document.getElementById('patInput').value = '';
+    renderPatList();
   };
 
   document.querySelectorAll('.extra-item').forEach(el => {
@@ -345,6 +499,87 @@ function bindEvents() {
   document.getElementById('callMinimizeBtn').onclick = () => { document.getElementById('callScreen').classList.remove('show'); document.getElementById('callMiniBubble').classList.add('show'); };
   document.getElementById('callMiniBubble').onclick = () => { document.getElementById('callScreen').classList.add('show'); document.getElementById('callMiniBubble').classList.remove('show'); };
   document.getElementById('callHangup').onclick = () => { clearInterval(callState.timer); callState.active = false; document.getElementById('callScreen').classList.remove('show'); document.getElementById('callMiniBubble').classList.remove('show'); };
+}
+
+function renderWordcards() {
+  var tabs = document.getElementById('cardsFilterTabs');
+  var groups = {}; DB.wordcards.forEach(w => groups[w.group] = (groups[w.group]||0)+1);
+  var html = `<div class="manage-filter-tab active" onclick="setGroup('全部')">全部 (${DB.wordcards.length})</div>`;
+  for(var g in groups) html += `<div class="manage-filter-tab" onclick="setGroup('${g}')">${esc(g)} (${groups[g]})</div>`;
+  tabs.innerHTML = html;
+
+  var list = DB.wordcards;
+  document.getElementById('rlGroups').innerHTML = list.map(w => `<div class="rl-group-item">${esc(w.text)} <span style="color:#999;font-size:12px;">[${esc(w.group)}]</span></div>`).join('');
+}
+function setGroup(g) {
+  var list = g === '全部' ? DB.wordcards : DB.wordcards.filter(w => w.group === g);
+  document.getElementById('rlGroups').innerHTML = list.map(w => `<div class="rl-group-item">${esc(w.text)}</div>`).join('');
+}
+
+function renderPatList() {
+  var list = DB.settings.patList || [];
+  document.getElementById('patList').innerHTML = list.map(t => `<div class="rl-mood-item">${esc(t)}</div>`).join('');
+}
+
+function renderMailbox() {
+  var body = document.getElementById('mbBody');
+  document.getElementById('letterDetailView').style.display = 'none';
+  var tab = document.querySelector('.mb-tab.active').getAttribute('data-mbtab');
+  
+  if (tab === 'write') {
+    body.innerHTML = `
+      <textarea id="newLetterText" class="rl-input" style="height:150px;margin-bottom:10px;" placeholder="写下你想说的话..."></textarea>
+      <button class="rl-btn rl-btn-primary" style="width:100%;" onclick="sendLetter()">发送信件</button>
+    `;
+    return;
+  }
+
+  var isReceived = tab === 'received';
+  var letters = DB.letters.filter(l => l.chatId === currentChatId && l.direction === tab);
+  
+  if (!letters.length) {
+    body.innerHTML = `<div style="text-align:center;color:#999;margin-top:50px;">暂无信件</div>`;
+    return;
+  }
+
+  body.innerHTML = letters.map(l => `
+    <div class="letter-list-item" onclick="openLetterDetail(${l.id})">
+      <div style="font-size:15px;font-weight:500;">${isReceived?'来自对方的信':'我发出的信'}</div>
+      <div style="font-size:12px;color:#999;margin-top:5px;">${new Date(l.createdAt).toLocaleString()}</div>
+    </div>
+  `).join('');
+}
+
+function sendLetter() {
+  var text = document.getElementById('newLetterText').value.trim();
+  if (!text) return alert('内容不能为空');
+  DB.letters.push({ id: ID(), chatId: currentChatId, direction: 'sent', text: text, createdAt: Date.now() });
+  save(); document.querySelector('.mb-tab[data-mbtab="sent"]').click(); renderMailbox();
+  setTimeout(() => {
+    DB.letters.push({ id: ID(), chatId: currentChatId, direction: 'received', text: '收到你的信啦，我也很想你。', createdAt: Date.now() });
+    save(); alert('收到一封新回信！');
+  }, 5000);
+}
+
+function openLetterDetail(id) {
+  var l = DB.letters.find(x => x.id === id);
+  document.getElementById('letterDetailView').style.display = 'flex';
+  document.getElementById('letterDetailContent').innerHTML = `
+    <div class="letter-box">
+      <div class="letter-meta">${new Date(l.createdAt).toLocaleString()}</div>
+      <div class="letter-text">${esc(l.text)}</div>
+    </div>
+    <textarea id="replyText" class="rl-input" style="height:80px;margin-top:10px;" placeholder="回信..."></textarea>
+    <button class="rl-btn rl-btn-primary" style="width:100%;margin-top:10px;" onclick="replyLetter(${l.id})">发送回信</button>
+  `;
+}
+
+function replyLetter(id) {
+  var text = document.getElementById('replyText').value.trim();
+  if (!text) return;
+  var l = DB.letters.find(x => x.id === id);
+  l.text += "\n\n[回复] " + text;
+  save(); alert('回信成功！'); openLetterDetail(id);
 }
 
 window.onload = init;
