@@ -743,10 +743,10 @@
         <div class="settings-section-title">聊天行为</div>
         <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:10px;">
           <div><div class="settings-label">对方回复延迟区间</div><div class="settings-desc">实际延迟会在此区间随机</div></div>
-          <div class="delay-range-row">
-            <div class="delay-range-line"><span class="delay-range-label">最快</span><input type="range" class="settings-slider" id="replyDelayMinSlider" min="0" max="1500" value="1" style="flex:1;"><span class="delay-range-value" id="replyDelayMinValue">1s</span></div>
-            <div class="delay-range-line"><span class="delay-range-label">最慢</span><input type="range" class="settings-slider" id="replyDelayMaxSlider" min="0" max="1500" value="10" style="flex:1;"><span class="delay-range-value" id="replyDelayMaxValue">10s</span></div>
-          </div>
+        <div class="delay-range-row">
+  <div class="delay-range-line"><span class="delay-range-label">最快</span><input type="number" class="settings-input" id="replyDelayMinInput" min="0" max="3600" value="1" style="width: 80px; padding: 4px 8px; text-align:center;"><span class="delay-range-label">s</span></div>
+  <div class="delay-range-line"><span class="delay-range-label">最慢</span><input type="number" class="settings-input" id="replyDelayMaxInput" min="0" max="3600" value="10" style="width: 80px; padding: 4px 8px; text-align:center;"><span class="delay-range-label">s</span></div>
+</div>
         </div>
       <div class="settings-row"><div><div class="settings-label">允许拼字卡概率</div><div class="settings-desc">触发后才会回复字卡</div></div><div style="display:flex;align-items:center;gap:8px"><input type="range" class="settings-slider" id="wordcardProbSlider" min="0" max="100" value="50"><span class="settings-value" id="wordcardProbValue">50%</span></div></div>
       <div class="settings-row">
@@ -1774,12 +1774,10 @@ async function handleSend() {
   clearQuote();
   await renderMessages(); await renderHomeList();
 
-  // 已读不回判定
   var readIgnoreOn = !!settingsCache.readIgnoreOn;
   var readIgnoreProb = settingsCache.readIgnoreProb !== undefined ? settingsCache.readIgnoreProb : 50;
   var willIgnore = readIgnoreOn && (Math.random() * 100 < readIgnoreProb);
 
-  // 先标记已读
   setTimeout(async function() {
     await updateMessage(msgId, { read: true });
     if (currentChatId === chatId) await renderMessages();
@@ -1797,45 +1795,70 @@ async function handleSend() {
     
     setTyping(false);
     
+    var userLastMsg = await getMessage(msgId);
+    var myNameStr = settingsCache.myName || '我';
+    var myContentStr = userLastMsg.type === 'image' ? '[图片]' : (userLastMsg.text || '');
+    var quoteForThis = { name: myNameStr, text: myContentStr.slice(0, 20) + (myContentStr.length > 20 ? '...' : '') };
+
     for (var k = 0; k < msgCount; k++) {
-      var replyText = null;
-      
-      // 概率触发拼字卡
-      if (Math.random() * 100 < wp) {
-        replyText = await buildWordcardMessage(settingsCache.chatCardMin || 2, settingsCache.chatCardMax || 2);
-      }
-      
-      // 没抽中则随机从字卡库抽一句
-      if (!replyText) {
-        var allCards = await getAllWordcards();
-        if (allCards.length > 0) {
-          replyText = allCards[Math.floor(Math.random() * allCards.length)].text;
+      var roll = Math.random();
+      var replyType = 'text';
+      var replyText = '';
+      var replyImg = null;
+      var replyExtra = null;
+
+      if (roll < 0.15) {
+        replyType = 'pat';
+        var chat = await getChat(chatId);
+        var otherName = chat ? getChatName(chat) : 'TA';
+        replyText = otherName + '拍了拍' + myNameStr + '的头';
+      } else if (roll < 0.35) {
+        var emos = await getEmojis('other');
+        if (emos.length === 0) emos = await getEmojis('me');
+        if (emos.length > 0) {
+          replyType = 'image';
+          replyImg = emos[Math.floor(Math.random() * emos.length)].dataUrl;
         } else {
-          replyText = "在忙吗？";
+          replyType = 'text';
+          replyText = "嗯嗯";
+        }
+      } else {
+        if (Math.random() * 100 < wp) {
+          replyText = await buildWordcardMessage(settingsCache.chatCardMin || 2, settingsCache.chatCardMax || 2);
+        }
+        if (!replyText) {
+          var allCards = await getAllWordcards();
+          if (allCards.length > 0) {
+            replyText = allCards[Math.floor(Math.random() * allCards.length)].text;
+          } else {
+            replyText = "在忙吗？";
+          }
         }
       }
 
-      // 对方撤回判定
+      if (replyType !== 'pat' && Math.random() < 0.4) {
+        replyExtra = { quote: quoteForThis };
+      }
+
       var recallOn = !!settingsCache.recallToggle;
       var recallProb = settingsCache.recallProb !== undefined ? settingsCache.recallProb : 50;
       var willRecall = recallOn && (Math.random() * 100 < recallProb);
 
-      var replyId = await addMessage(chatId, replyText, 'other');
+      var replyId = await addMessage(chatId, replyText, 'other', replyType, replyImg, replyExtra);
       if (currentChatId === chatId) await renderMessages();
       await renderHomeList();
-      notify(settingsCache.otherName || 'TA', replyText);
+      notify(settingsCache.otherName || 'TA', replyType === 'image' ? '[图片]' : replyText);
 
-      if (willRecall) {
+      if (willRecall && replyType !== 'pat') {
         setTimeout(async function() {
           var m = await getMessage(replyId);
           if (!m) return;
-          await updateMessage(replyId, { recalled: true, originalText: replyText, text: '' });
+          await updateMessage(replyId, { recalled: true, originalText: replyType==='image'?'[图片]':replyText, text: '' });
           if (currentChatId === chatId) await renderMessages();
           await renderHomeList();
         }, 4000);
       }
       
-      // 多条消息之间稍微停顿一下
       if (k < msgCount - 1) {
         await new Promise(function(r){ setTimeout(r, 800 + Math.random() * 500); });
       }
@@ -1873,22 +1896,72 @@ async function triggerOtherTransfer(chatId) {
 var proactiveTimer = null;
 async function checkProactiveMessage() {
   if (!settingsCache.proactiveOn) return;
-  var cards = await getAllWordcards();
-  if (!cards.length) return;
   var interval = settingsCache.proactiveInterval !== undefined ? settingsCache.proactiveInterval : 60;
   var lastTime = settingsCache.lastProactiveTime || 0;
   if (Date.now() - lastTime < interval * 60 * 1000) return;
+  
   var chats = await getAllChats();
   if (!chats.length) return;
   var chat = chats[Math.floor(Math.random() * chats.length)];
-  var pool = cards.map(function(c){ return c.text; }).filter(function(t){ return t && t.trim(); });
-  if (!pool.length) return;
-  var text = pool[Math.floor(Math.random() * pool.length)];
-  await addMessage(chat.id, text, 'other');
+  var chatId = chat.id;
+  
+  var wp = settingsCache.wordcardProb !== undefined ? settingsCache.wordcardProb : 50;
+  var minC = settingsCache.replyMsgCountMin || 1;
+  var maxC = settingsCache.replyMsgCountMax || 2;
+  var msgCount = minC + Math.floor(Math.random() * (maxC - minC + 1));
+  
+  var myNameStr = settingsCache.myName || '我';
+  
+  for (var k = 0; k < msgCount; k++) {
+    var roll = Math.random();
+    var replyType = 'text';
+    var replyText = '';
+    var replyImg = null;
+
+    if (roll < 0.15) {
+      replyType = 'pat';
+      var otherName = chat ? getChatName(chat) : 'TA';
+      replyText = otherName + '拍了拍' + myNameStr + '的头';
+    } else if (roll < 0.35) {
+      var emos = await getEmojis('other');
+      if (emos.length === 0) emos = await getEmojis('me');
+      if (emos.length > 0) {
+        replyType = 'image';
+        replyImg = emos[Math.floor(Math.random() * emos.length)].dataUrl;
+      } else {
+        replyType = 'text';
+        replyText = "在干嘛呢？";
+      }
+    } else {
+      if (Math.random() * 100 < wp) {
+        replyText = await buildWordcardMessage(settingsCache.chatCardMin || 2, settingsCache.chatCardMax || 2);
+      }
+      if (!replyText) {
+        var allCards = await getAllWordcards();
+        if (allCards.length > 0) {
+          replyText = allCards[Math.floor(Math.random() * allCards.length)].text;
+        } else {
+          replyText = "滴滴";
+        }
+      }
+    }
+    
+    await addMessage(chatId, replyText, 'other', replyType, replyImg, null);
+    
+    if (k < msgCount - 1) {
+      await new Promise(function(r){ setTimeout(r, 800 + Math.random() * 500); });
+    }
+  }
+  
   await setSetting('lastProactiveTime', Date.now());
-  if (currentChatId === chat.id) await renderMessages();
+  if (currentChatId === chatId) await renderMessages();
   await renderHomeList();
-  notify(settingsCache.otherName || 'TA', text);
+  
+  var lastM = await getMessages(chatId);
+  if (lastM.length) {
+     var last = lastM[lastM.length - 1];
+     notify(settingsCache.otherName || 'TA', last.type === 'image' ? '[图片]' : last.text);
+  }
 }
 function startProactiveLoop() {
   if (proactiveTimer) clearInterval(proactiveTimer);
@@ -2282,10 +2355,107 @@ async function sendImageMessage(d) {
     if (content0.length > 20) content0 = content0.slice(0, 20) + '...';
     quoteData = { name: senderName, text: content0 };
   }
-  await addMessage(chatId, '', 'user', 'image', d, quoteData ? { quote: quoteData } : null);
+  
+  var msgId = await addMessage(chatId, '', 'user', 'image', d, quoteData ? { quote: quoteData } : null);
   clearQuote();
   await renderMessages(); await renderHomeList();
   document.getElementById('emojiPanel').classList.remove('show');
+  
+  // 触发对方回复逻辑
+  triggerReplyAfterImage(chatId, msgId);
+}
+
+async function triggerReplyAfterImage(chatId, msgId) {
+  var readIgnoreOn = !!settingsCache.readIgnoreOn;
+  var readIgnoreProb = settingsCache.readIgnoreProb !== undefined ? settingsCache.readIgnoreProb : 50;
+  var willIgnore = readIgnoreOn && (Math.random() * 100 < readIgnoreProb);
+
+  setTimeout(async function() {
+    await updateMessage(msgId, { read: true });
+    if (currentChatId === chatId) await renderMessages();
+  }, 500);
+
+  if (willIgnore) return;
+
+  setTyping(true);
+  
+  setTimeout(async function() {
+    var wp = settingsCache.wordcardProb !== undefined ? settingsCache.wordcardProb : 50;
+    var minC = settingsCache.replyMsgCountMin || 1;
+    var maxC = settingsCache.replyMsgCountMax || 2;
+    var msgCount = minC + Math.floor(Math.random() * (maxC - minC + 1));
+    
+    setTyping(false);
+    
+    var myNameStr = settingsCache.myName || '我';
+    var quoteForThis = { name: myNameStr, text: '[图片]' };
+
+    for (var k = 0; k < msgCount; k++) {
+      var roll = Math.random();
+      var replyType = 'text';
+      var replyText = '';
+      var replyImg = null;
+      var replyExtra = null;
+
+      if (roll < 0.15) {
+        replyType = 'pat';
+        var chat = await getChat(chatId);
+        var otherName = chat ? getChatName(chat) : 'TA';
+        replyText = otherName + '拍了拍' + myNameStr + '的头';
+      } else if (roll < 0.35) {
+        var emos = await getEmojis('other');
+        if (emos.length === 0) emos = await getEmojis('me');
+        if (emos.length > 0) {
+          replyType = 'image';
+          replyImg = emos[Math.floor(Math.random() * emos.length)].dataUrl;
+        } else {
+          replyType = 'text';
+          replyText = "这个表情包好可爱！";
+        }
+      } else {
+        if (Math.random() * 100 < wp) {
+          replyText = await buildWordcardMessage(settingsCache.chatCardMin || 2, settingsCache.chatCardMax || 2);
+        }
+        if (!replyText) {
+          var allCards = await getAllWordcards();
+          if (allCards.length > 0) {
+            replyText = allCards[Math.floor(Math.random() * allCards.length)].text;
+          } else {
+            replyText = "哈哈哈哈";
+          }
+        }
+      }
+
+      if (replyType !== 'pat' && Math.random() < 0.4) {
+        replyExtra = { quote: quoteForThis };
+      }
+
+      var recallOn = !!settingsCache.recallToggle;
+      var recallProb = settingsCache.recallProb !== undefined ? settingsCache.recallProb : 50;
+      var willRecall = recallOn && (Math.random() * 100 < recallProb);
+
+      var replyId = await addMessage(chatId, replyText, 'other', replyType, replyImg, replyExtra);
+      if (currentChatId === chatId) await renderMessages();
+      await renderHomeList();
+      
+      notify(settingsCache.otherName || 'TA', replyType === 'image' ? '[图片]' : replyText);
+
+      if (willRecall && replyType !== 'pat') {
+        setTimeout(async function() {
+          var m = await getMessage(replyId);
+          if (!m) return;
+          await updateMessage(replyId, { recalled: true, originalText: replyType==='image'?'[图片]':replyText, text: '' });
+          if (currentChatId === chatId) await renderMessages();
+          await renderHomeList();
+        }, 4000);
+      }
+      
+      if (k < msgCount - 1) {
+        await new Promise(function(r){ setTimeout(r, 800 + Math.random() * 500); });
+      }
+    }
+    setTimeout(function() { maybeTriggerOtherAction(chatId); }, 1200);
+  }, getReplyDelayMs());
 }
 
 // ===== 弹窗 =====
@@ -2704,10 +2874,8 @@ async function loadSettingsToUI() {
   var v = function(k, d) { return settingsCache[k] !== undefined ? settingsCache[k] : d; };
   document.getElementById('myDefaultAvatarPreview').innerHTML = settingsCache.myDefaultAvatar ? '<img src="' + settingsCache.myDefaultAvatar + '">' : '我';
   document.getElementById('myNameInput').value = v('myName', '我');
-  document.getElementById('replyDelayMinSlider').value = v('replyDelayMin', 1);
-  document.getElementById('replyDelayMinValue').textContent = v('replyDelayMin', 1) + 's';
-  document.getElementById('replyDelayMaxSlider').value = v('replyDelayMax', 10);
-  document.getElementById('replyDelayMaxValue').textContent = v('replyDelayMax', 10) + 's';
+   document.getElementById('replyDelayMinInput').value = v('replyDelayMin', 1);
+  document.getElementById('replyDelayMaxInput').value = v('replyDelayMax', 10);
    document.getElementById('wordcardProbSlider').value = v('wordcardProb', 50);
   document.getElementById('wordcardProbValue').textContent = v('wordcardProb', 50) + '%';
   document.getElementById('chatCardMinSlider').value = v('chatCardMin', 2);
@@ -3133,6 +3301,12 @@ async function renderManageList() {
   if (manageType === 'cards') {
     elId = 'manageListCards';
     var all = await getAllWordcards();
+    
+    // 【核心修复】只显示当前选中的分组
+    if (currentWordcardGroup && currentWordcardGroup !== '全部') {
+      all = all.filter(function(c) { return c.group === currentWordcardGroup; });
+    }
+    
     list = all.map(function(c){ return { id: c.id, text: c.text, group: c.group }; });
   } else if (manageType === 'mood') {
     elId = 'manageListMood';
@@ -3147,9 +3321,10 @@ async function renderManageList() {
     var pc = await getPeriodCareList();
     list = pc.map(function(t, i){ return { id: 'period_' + i, text: t }; });
   }
+  
   var el = document.getElementById(elId);
   if (!el) return;
-  if (!list || !list.length) { el.innerHTML = '<div class="rl-empty">暂无内容</div>'; updateManageCount(); return; }
+  if (!list || !list.length) { el.innerHTML = '<div class="rl-empty">当前分组暂无内容</div>'; updateManageCount(); return; }
   el.innerHTML = '';
   list.forEach(function(item) {
     var div = document.createElement('div');
@@ -3336,8 +3511,8 @@ document.getElementById('myDefaultAvatarInput').onchange = function(e) {
   r.readAsDataURL(file); e.target.value = '';
 };
 document.getElementById('myNameInput').onchange = async function(e) { await setSetting('myName', e.target.value || '我'); };
-document.getElementById('replyDelayMinSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('replyDelayMinValue').textContent = v + 's'; await setSetting('replyDelayMin', v); };
-document.getElementById('replyDelayMaxSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('replyDelayMaxValue').textContent = v + 's'; await setSetting('replyDelayMax', v); };
+document.getElementById('replyDelayMinInput').onchange = async function(e) { var v = Math.max(0, parseInt(e.target.value) || 0); e.target.value = v; await setSetting('replyDelayMin', v); };
+document.getElementById('replyDelayMaxInput').onchange = async function(e) { var v = Math.max(0, parseInt(e.target.value) || 0); e.target.value = v; await setSetting('replyDelayMax', v); };
 document.getElementById('wordcardProbSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('wordcardProbValue').textContent = v + '%'; await setSetting('wordcardProb', v); };
 document.getElementById('chatCardMinSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('chatCardMinValue').textContent = v + ' 张'; await setSetting('chatCardMin', v); };
 document.getElementById('chatCardMaxSlider').oninput = async function(e) { var v = parseInt(e.target.value); document.getElementById('chatCardMaxValue').textContent = v + ' 张'; await setSetting('chatCardMax', v); };
