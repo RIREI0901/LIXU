@@ -749,6 +749,14 @@
           </div>
         </div>
       <div class="settings-row"><div><div class="settings-label">允许拼字卡概率</div><div class="settings-desc">触发后才会回复字卡</div></div><div style="display:flex;align-items:center;gap:8px"><input type="range" class="settings-slider" id="wordcardProbSlider" min="0" max="100" value="50"><span class="settings-value" id="wordcardProbValue">50%</span></div></div>
+      <div class="settings-row">
+  <div><div class="settings-label">对方回复条数区间</div><div class="settings-desc">被动回复与主动消息适用</div></div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <input type="number" class="settings-input" id="replyMsgCountMin" style="width:60px; padding:4px;" min="1" max="10">
+    至
+    <input type="number" class="settings-input" id="replyMsgCountMax" style="width:60px; padding:4px;" min="1" max="10">
+  </div>
+</div>
       </div>
 
       <div class="settings-section">
@@ -1721,7 +1729,7 @@ async function buildWordcardMessage(minCount, maxCount) {
   
   var min = parseInt(minCount, 10) || 2;
   var max = parseInt(maxCount, 10) || 2;
-  if (min > max) { var temp = min; min = max; max = temp; } // 防止滑块反过来
+  if (min > max) { var temp = min; min = max; max = temp; }
   
   min = Math.min(min, pool.length);
   max = Math.min(max, pool.length);
@@ -1730,14 +1738,19 @@ async function buildWordcardMessage(minCount, maxCount) {
   
   var n = min + Math.floor(Math.random() * (max - min + 1));
   var copy = pool.slice(), picked = [];
-  for (var i = 0; i < n && copy.length; i++) { var idx = Math.floor(Math.random() * copy.length); picked.push(copy.splice(idx, 1)[0]); }
-  return picked.join('');
-}
-function getReplyDelayMs() {
-  var mn = settingsCache.replyDelayMin !== undefined ? settingsCache.replyDelayMin : 1;
-  var mx = settingsCache.replyDelayMax !== undefined ? settingsCache.replyDelayMax : 10;
-  if (mx < mn) { var t = mn; mn = mx; mx = t; }
-  return Math.max((mn + Math.random() * (mx - mn)) * 1000, 300);
+  for (var i = 0; i < n && copy.length; i++) { 
+    var idx = Math.floor(Math.random() * copy.length); 
+    picked.push(copy.splice(idx, 1)[0]); 
+  }
+  
+  // 【新增】拼接时随机加标点
+  var punctuation = ['，', '。', '！', '…', ' ', ''];
+  var result = '';
+  for (var j = 0; j < picked.length; j++) {
+    var p = punctuation[Math.floor(Math.random() * punctuation.length)];
+    result += picked[j] + p;
+  }
+  return result.trim();
 }
 
 // ===== 发消息 =====
@@ -1761,10 +1774,7 @@ async function handleSend() {
   clearQuote();
   await renderMessages(); await renderHomeList();
 
-  var cards = await getAllWordcards();
-  if (!cards.length) return;
-
-  // 已读不回
+  // 已读不回判定
   var readIgnoreOn = !!settingsCache.readIgnoreOn;
   var readIgnoreProb = settingsCache.readIgnoreProb !== undefined ? settingsCache.readIgnoreProb : 50;
   var willIgnore = readIgnoreOn && (Math.random() * 100 < readIgnoreProb);
@@ -1778,36 +1788,58 @@ async function handleSend() {
   if (willIgnore) return;
 
   setTyping(true);
+  
   setTimeout(async function() {
-       var replyText = null;
     var wp = settingsCache.wordcardProb !== undefined ? settingsCache.wordcardProb : 50;
-    if (Math.random() * 100 < wp) {
-      replyText = await buildWordcardMessage(settingsCache.chatCardMin || 2, settingsCache.chatCardMax || 2);
-    }
-    if (!replyText) { setTyping(false); return; }
-
-    // 对方撤回判定
-    var recallOn = !!settingsCache.recallToggle;
-    var recallProb = settingsCache.recallProb !== undefined ? settingsCache.recallProb : 50;
-    var willRecall = recallOn && (Math.random() * 100 < recallProb);
-
-    var replyId = await addMessage(chatId, replyText, 'other');
+    var minC = settingsCache.replyMsgCountMin || 1;
+    var maxC = settingsCache.replyMsgCountMax || 2;
+    var msgCount = minC + Math.floor(Math.random() * (maxC - minC + 1));
+    
     setTyping(false);
-    if (currentChatId === chatId) await renderMessages();
-    await renderHomeList();
-    notify(settingsCache.otherName || 'TA', replyText);
+    
+    for (var k = 0; k < msgCount; k++) {
+      var replyText = null;
+      
+      // 概率触发拼字卡
+      if (Math.random() * 100 < wp) {
+        replyText = await buildWordcardMessage(settingsCache.chatCardMin || 2, settingsCache.chatCardMax || 2);
+      }
+      
+      // 没抽中则随机从字卡库抽一句
+      if (!replyText) {
+        var allCards = await getAllWordcards();
+        if (allCards.length > 0) {
+          replyText = allCards[Math.floor(Math.random() * allCards.length)].text;
+        } else {
+          replyText = "在忙吗？";
+        }
+      }
 
-    // 对方撤回（如果触发）
-    if (willRecall) {
-      setTimeout(async function() {
-        var m = await getMessage(replyId);
-        if (!m) return;
-        await updateMessage(replyId, { recalled: true, originalText: replyText, text: '' });
-        if (currentChatId === chatId) await renderMessages();
-        await renderHomeList();
-      }, 4000);
+      // 对方撤回判定
+      var recallOn = !!settingsCache.recallToggle;
+      var recallProb = settingsCache.recallProb !== undefined ? settingsCache.recallProb : 50;
+      var willRecall = recallOn && (Math.random() * 100 < recallProb);
+
+      var replyId = await addMessage(chatId, replyText, 'other');
+      if (currentChatId === chatId) await renderMessages();
+      await renderHomeList();
+      notify(settingsCache.otherName || 'TA', replyText);
+
+      if (willRecall) {
+        setTimeout(async function() {
+          var m = await getMessage(replyId);
+          if (!m) return;
+          await updateMessage(replyId, { recalled: true, originalText: replyText, text: '' });
+          if (currentChatId === chatId) await renderMessages();
+          await renderHomeList();
+        }, 4000);
+      }
+      
+      // 多条消息之间稍微停顿一下
+      if (k < msgCount - 1) {
+        await new Promise(function(r){ setTimeout(r, 800 + Math.random() * 500); });
+      }
     }
-
     setTimeout(function() { maybeTriggerOtherAction(chatId); }, 1200);
   }, getReplyDelayMs());
 }
